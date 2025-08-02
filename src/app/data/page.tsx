@@ -23,7 +23,7 @@ export default function DataPage() {
     ? laps.reduce((best, current) => {
         const parseTime = (timeStr: string) => {
           const [minutes, seconds] = timeStr.split(":");
-          return parseFloat(minutes || "0") * 60 + parseFloat(seconds || "0");
+          return parseFloat(minutes ?? "0") * 60 + parseFloat(seconds ?? "0");
         };
         const currentTime = parseTime(current.lapTime);
         const bestTime = parseTime(best.lapTime);
@@ -147,7 +147,7 @@ export default function DataPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-6">
             <div className="text-3xl font-bold text-green-400 mb-2">
-              {bestLap?.lapTime || "N/A"}
+              {bestLap?.lapTime ?? "N/A"}
             </div>
             <div className="text-slate-300 font-medium">Best Lap Time</div>
             {bestLap && (
@@ -271,7 +271,7 @@ export default function DataPage() {
                         </div>
                         <div className="text-xs text-slate-400">
                           {lap.totalDataPoints && lap.totalDataPoints > 1000 
-                            ? `${Math.round(lap.totalDataPoints / (parseFloat(lap.lapTime.split(':')[0] || '0') * 60 + parseFloat(lap.lapTime.split(':')[1] || '0')))}Hz`
+                            ? `${Math.round(lap.totalDataPoints / (parseFloat(lap.lapTime.split(':')[0] ?? '0') * 60 + parseFloat(lap.lapTime.split(':')[1] ?? '0')))}Hz`
                             : lap.totalDataPoints 
                               ? 'Low-res' 
                               : 'Unknown'
