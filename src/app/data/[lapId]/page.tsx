@@ -1,5 +1,6 @@
 "use client";
 
+import React from 'react';
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
@@ -61,6 +62,7 @@ export default function LapAnalysisPage() {
   const [frozenPoint, setFrozenPoint] = useState<TelemetryPoint | null>(null);
   const [isDraggingDot, setIsDraggingDot] = useState(false);
   const [telemetryDropdownOpen, setTelemetryDropdownOpen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Zoom and pan state
   const [zoom, setZoom] = useState(1);
@@ -86,6 +88,79 @@ export default function LapAnalysisPage() {
     }
   }, [isDragging]);
 
+  // Handle fullscreen canvas resize
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const resizeCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+      
+      if (isFullscreen) {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Set CSS size
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        
+        // Set actual drawing buffer size with device pixel ratio
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+      } else {
+        // Let the canvas return to its normal CSS size
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        
+        // Set CSS size
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        
+        // Set actual drawing buffer size with device pixel ratio
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+      }
+      
+      // Scale the context to match device pixel ratio
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+      }
+      
+      // Automatically reset view when switching modes
+      setZoom(1);
+      setPanX(0);
+      setPanY(0);
+    };
+
+    // Small delay to ensure DOM has updated
+    const timeoutId = setTimeout(resizeCanvas, 10);
+    
+    if (isFullscreen) {
+      window.addEventListener('resize', resizeCanvas);
+    }
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, [isFullscreen]);
+
+  // Handle escape key for fullscreen exit
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isFullscreen]);
+
   // Enhanced track map and racing line drawing
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -94,13 +169,13 @@ export default function LapAnalysisPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Get CSS dimensions for calculations (not the scaled buffer size)
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = rect.width;
+    const cssHeight = rect.height;
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Set canvas size
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
 
     // Draw background
     ctx.fillStyle = "#1e293b";
@@ -120,13 +195,13 @@ export default function LapAnalysisPage() {
     const zRange = maxZ - minZ;
     
     // Calculate scale to fit track with aspect ratio preservation
-    const scaleX = (canvas.width - 2 * padding) / xRange;
-    const scaleZ = (canvas.height - 2 * padding) / zRange;
+    const scaleX = (cssWidth - 2 * padding) / xRange;
+    const scaleZ = (cssHeight - 2 * padding) / zRange;
     const scale = Math.min(scaleX, scaleZ);
     
     // Calculate offsets to center the track with zoom and pan
-    const baseOffsetX = padding + (canvas.width - 2 * padding - xRange * scale) / 2;
-    const baseOffsetY = padding + (canvas.height - 2 * padding - zRange * scale) / 2;
+    const baseOffsetX = padding + (cssWidth - 2 * padding - xRange * scale) / 2;
+    const baseOffsetY = padding + (cssHeight - 2 * padding - zRange * scale) / 2;
     
     // Apply zoom and pan transformations
     const zoomedScale = scale * zoom;
@@ -482,7 +557,7 @@ export default function LapAnalysisPage() {
       ctx.textAlign = "center";
       ctx.fillText(`${activePoint.speed.toFixed(0)} km/h`, carX, carY - 20);
     }
-  }, [lapData, zoom, panX, panY, visualizationMode, hoveredPoint, arrowMode, isFrozen, frozenPoint]);
+  }, [lapData, zoom, panX, panY, visualizationMode, hoveredPoint, arrowMode, isFrozen, frozenPoint, isFullscreen]);
 
   // Enhanced mouse move handling with freeze and drag support
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -715,7 +790,123 @@ export default function LapAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
-      <div className="max-w-[1800px] mx-auto px-6 py-8">
+      {isFullscreen ? (
+        /* Fullscreen Mode */
+        <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+          {/* Fullscreen Controls */}
+          <div className="absolute top-4 left-4 z-60 flex gap-2">
+            <button
+              onClick={() => setIsFullscreen(false)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors"
+            >
+              Exit Fullscreen
+            </button>
+            <button
+              onClick={() => {
+                setIsFrozen(!isFrozen);
+                if (!isFrozen) {
+                  setFrozenPoint(hoveredPoint || (lapData?.telemetryPoints[0] || null));
+                }
+              }}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                isFrozen 
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white' 
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+              }`}
+            >
+              {isFrozen ? 'Frozen' : 'Freeze Dot'}
+            </button>
+            <button
+              onClick={resetView}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+            >
+              Reset View
+            </button>
+            <a
+              href={`/data/${lapData.id}/playback`}
+              className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-400 hover:from-green-700 hover:to-green-500 text-white rounded-lg text-sm transition-colors inline-block"
+            >
+              ▶ Playback
+            </a>
+          </div>
+
+          {/* Fullscreen Canvas */}
+          <div className="w-full h-full relative">
+            <canvas
+              ref={canvasRef}
+              className="w-full h-full"
+              onMouseMove={handleMouseDrag}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onWheel={handleWheel}
+              style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+            />
+          </div>
+
+          {/* Floating Telemetry Data */}
+          {(hoveredPoint || frozenPoint) && (
+            <div 
+              className="fixed bg-black/80 backdrop-blur-md rounded-xl p-4 text-white border border-white/20 pointer-events-none z-70 max-w-md"
+              style={{
+                left: `${Math.min(mousePos.x + 20, window.innerWidth - 400)}px`,
+                top: `${Math.max(mousePos.y - 10, 10)}px`,
+              }}
+            >
+              {(() => {
+                const activePoint = isFrozen ? frozenPoint : hoveredPoint;
+                if (!activePoint) return null;
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    {/* Basic Data */}
+                    <div className="space-y-2">
+                      <div className="text-blue-400 font-semibold text-sm">Basic Data</div>
+                      <div className="space-y-1 text-xs">
+                        <div>Time: <span className="text-slate-300">{activePoint.time.toFixed(2)}s</span></div>
+                        <div>Speed: <span className="text-blue-400">{activePoint.speed.toFixed(1)} km/h</span></div>
+                        <div>Throttle: <span className="text-green-400">{(activePoint.throttle * 100).toFixed(0)}%</span></div>
+                        <div>Brake: <span className="text-red-400">{(activePoint.brake * 100).toFixed(0)}%</span></div>
+                        <div>Gear: <span className="text-white">{activePoint.gear}</span></div>
+                        <div>RPM: <span className="text-white">{activePoint.rpm}</span></div>
+                      </div>
+                    </div>
+
+                    {/* G-Forces */}
+                    <div className="space-y-2">
+                      <div className="text-yellow-400 font-semibold text-sm">G-Forces</div>
+                      <div className="space-y-1 text-xs">
+                        <div>Lateral: <span className="text-yellow-300">{activePoint.gForceX.toFixed(1)}g</span></div>
+                        <div>Longitudinal: <span className="text-yellow-300">{activePoint.gForceZ.toFixed(1)}g</span></div>
+                        {activePoint.gForceY !== undefined && (
+                          <div>Vertical: <span className="text-yellow-300">{activePoint.gForceY.toFixed(1)}g</span></div>
+                        )}
+                        <div>Total: <span className="text-yellow-400">{getTotalGForce(activePoint).toFixed(1)}g</span></div>
+                      </div>
+                    </div>
+
+                    {/* Additional Data */}
+                    <div className="space-y-2">
+                      <div className="text-purple-400 font-semibold text-sm">Additional</div>
+                      <div className="space-y-1 text-xs">
+                        <div>Sector: <span className="text-white">{(activePoint.currentSector || 0) + 1}</span></div>
+                        {activePoint.fuel !== undefined && (
+                          <div>Fuel: <span className="text-blue-300">{activePoint.fuel.toFixed(1)}L</span></div>
+                        )}
+                        {activePoint.tyreTemperature && activePoint.tyreTemperature.length >= 4 && (
+                          <div>Tire Avg: <span className="text-orange-400">{getAverageTireTemp(activePoint).toFixed(0)}°C</span></div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Normal Mode */
+        <div className="max-w-[1800px] mx-auto px-6 py-8">
       {/* Header */}
         <div className="mb-8">
           <Link href="/data" className="inline-flex items-center text-blue-400 hover:text-blue-300 transition-colors mb-6">
@@ -866,6 +1057,22 @@ export default function LapAnalysisPage() {
                   >
                       Reset View
                   </button>
+                  <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className={`px-3 py-1 rounded text-sm transition-colors ${
+                        isFullscreen 
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white' 
+                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                      }`}
+                  >
+                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                  </button>
+                  <a
+                      href={`/data/${lapData.id}/playback`}
+                      className="px-3 py-1 bg-gradient-to-r from-green-600 to-green-400 hover:from-green-700 hover:to-green-500 text-white rounded text-sm transition-colors inline-block"
+                  >
+                      ▶ Playback
+                  </a>
                   </div>
                 </div>
               </div>
@@ -1094,7 +1301,7 @@ export default function LapAnalysisPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-2 bg-green-300 rounded"></div>
                         <span>Accelerating</span>
-                      </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-2 bg-gray-300 rounded"></div>
                   <span>Coasting</span>
@@ -1279,12 +1486,13 @@ export default function LapAnalysisPage() {
                       </span>
             </div>
                   )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+            )}
       </div>
+        </div>
+        </div>
+      )}
     </div>
   );
 } 
