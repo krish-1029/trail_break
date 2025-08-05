@@ -59,6 +59,7 @@ export interface TelemetryPoint {
 export interface TelemetryChunk {
   id: string;
   lapId: string;
+  userId: string; // Associate chunks with users
   chunkIndex: number;
   startTime: number;
   endTime: number;
@@ -78,6 +79,7 @@ export interface LapData {
   telemetryPoints: TelemetryPoint[]; // For backward compatibility - will be populated from chunks
   totalDataPoints: number; // Total number of high-res data points
   chunkCount: number; // Number of telemetry chunks
+  createdAt: Date; // When the lap was created
   sectorTimes: {
     sector1: number;
     sector2: number;
