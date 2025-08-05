@@ -27,7 +27,7 @@ export default function SignInPage() {
           body: JSON.stringify({ name, email, password }),
         });
         
-        const data = await res.json();
+        const data = await res.json() as { message?: string };
         
         if (res.ok) {
           // Registration successful, now sign in
@@ -43,7 +43,7 @@ export default function SignInPage() {
             setError("Registration successful but login failed. Please try signing in.");
           }
         } else {
-          setError(data.message || "Registration failed");
+          setError(data.message ?? "Registration failed");
         }
       } else {
         const result = await signIn("credentials", { 
@@ -58,7 +58,7 @@ export default function SignInPage() {
           setError("Invalid email or password");
         }
       }
-    } catch (error) {
+    } catch {
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

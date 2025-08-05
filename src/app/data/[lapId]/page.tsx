@@ -51,7 +51,7 @@ const getPerformanceColor = (point: TelemetryPoint): string => {
 
 export default function LapAnalysisPage() {
   const params = useParams();
-  const lapId = params.lapId as string;
+  const lapId = params?.lapId as string;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<TelemetryPoint | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });

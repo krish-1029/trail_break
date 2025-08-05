@@ -12,7 +12,6 @@ import {
   where, 
   deleteDoc,
   orderBy,
-  limit,
   Timestamp 
 } from "firebase/firestore";
 
@@ -111,10 +110,10 @@ const storeTelemetryChunks = async (lapId: string, telemetryPoints: TelemetryPoi
       lapId,
       userId, // Associate chunks with user
       chunkIndex: index,
-      startTime: chunkPoints[0]?.time || 0,
-      endTime: chunkPoints[chunkPoints.length - 1]?.time || 0,
+      startTime: chunkPoints[0]?.time ?? 0,
+      endTime: chunkPoints[chunkPoints.length - 1]?.time ?? 0,
       points: chunkPoints,
-      createdAt: Timestamp.now() as any,
+      createdAt: Timestamp.now().toDate(),
     };
     
     return addDoc(collection(db, "telemetryChunks"), chunkData);
@@ -200,7 +199,7 @@ export const lapRouter = createTRPCRouter({
         throw new Error("Lap not found");
       }
       
-      const data = docSnap.data();
+      const data = docSnap.data() as Record<string, unknown>;
       
       // Check if this lap belongs to the current user
       if (data.userId && data.userId !== userId) {
@@ -212,7 +211,7 @@ export const lapRouter = createTRPCRouter({
       
       if (data.telemetryPoints && Array.isArray(data.telemetryPoints)) {
         // Legacy lap with embedded telemetry data
-        telemetryPoints = data.telemetryPoints;
+        telemetryPoints = data.telemetryPoints as TelemetryPoint[];
       } else {
         // New format - load from chunks
         telemetryPoints = await loadTelemetryChunks(input.lapId, userId);
@@ -220,19 +219,19 @@ export const lapRouter = createTRPCRouter({
       
       return {
         id: docSnap.id,
-        lapTime: data.lapTime,
-        date: data.date,
-        car: data.car,
-        track: data.track,
-        conditions: data.conditions,
-        avgSpeed: data.avgSpeed,
-        maxSpeed: data.maxSpeed,
-        totalDataPoints: data.totalDataPoints || telemetryPoints.length,
-        chunkCount: data.chunkCount || 0,
+        lapTime: data.lapTime as string,
+        date: data.date as string,
+        car: data.car as string,
+        track: data.track as string,
+        conditions: data.conditions as string,
+        avgSpeed: data.avgSpeed as number,
+        maxSpeed: data.maxSpeed as number,
+        totalDataPoints: (data.totalDataPoints as number) ?? telemetryPoints.length,
+        chunkCount: (data.chunkCount as number) ?? 0,
         telemetryPoints, // Full data (either legacy or from chunks)
-        sectorTimes: data.sectorTimes,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-      } as LapData;
+        sectorTimes: data.sectorTimes as { sector1: number; sector2: number; sector3: number },
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt as Date,
+      } satisfies LapData;
     }),
 
   // Get all laps for the current user (without full telemetry data for performance)
@@ -248,22 +247,22 @@ export const lapRouter = createTRPCRouter({
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map(doc => {
-        const data = doc.data();
+        const data = doc.data() as Record<string, unknown>;
         return {
           id: doc.id,
-          lapTime: data.lapTime,
-          date: data.date,
-          car: data.car,
-          track: data.track,
-          conditions: data.conditions,
-          avgSpeed: data.avgSpeed,
-          maxSpeed: data.maxSpeed,
-          totalDataPoints: data.totalDataPoints || 0,
-          chunkCount: data.chunkCount || 0,
+          lapTime: data.lapTime as string,
+          date: data.date as string,
+          car: data.car as string,
+          track: data.track as string,
+          conditions: data.conditions as string,
+          avgSpeed: data.avgSpeed as number,
+          maxSpeed: data.maxSpeed as number,
+          totalDataPoints: (data.totalDataPoints as number) ?? 0,
+          chunkCount: (data.chunkCount as number) ?? 0,
           telemetryPoints: [], // Empty for list view performance
-          sectorTimes: data.sectorTimes,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-        } as LapData;
+          sectorTimes: data.sectorTimes as { sector1: number; sector2: number; sector3: number },
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt as Date,
+        } satisfies LapData;
       }); // No need for in-memory sorting since database handles it efficiently
     }),
 

@@ -10,7 +10,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === "POST") {
-    const { name, email, password } = req.body;
+    const { name, email, password } = req.body as { name: string; email: string; password: string };
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -27,7 +27,7 @@ export default async function handler(
         },
       });
       res.status(201).json({ user });
-    } catch (error) {
+    } catch {
       res.status(500).json({ message: "Something went wrong" });
     }
   } else {

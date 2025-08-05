@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
 import AuthButton from "@/components/AuthButton";
@@ -24,7 +24,7 @@ export default function DataDashboard() {
   // Delete mutation
   const deleteLap = api.lap.delete.useMutation({
     onSuccess: () => {
-      refetch(); // Refresh the lap list
+      void refetch(); // Refresh the lap list
       setDeleteConfirm({ isOpen: false, lapId: "", lapName: "" }); // Close the dialog
     },
     onError: (error) => {
@@ -409,7 +409,7 @@ export default function DataDashboard() {
         ) : (
           <div className="text-center text-slate-400 py-12">
             <h2 className="text-2xl font-semibold mb-2">No laps found</h2>
-            <p>It looks like you haven't recorded any laps yet.</p>
+            <p>It looks like you haven&apos;t recorded any laps yet.</p>
           </div>
         )}
       </div>

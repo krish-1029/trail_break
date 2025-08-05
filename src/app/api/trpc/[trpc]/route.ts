@@ -10,12 +10,12 @@ import { appRouter } from "@/server/api/root";
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
  * handling a HTTP request (e.g. when you make requests from Client Components).
  */
-const createContext = async (req: NextRequest) => {
+const createContext = async (_req: NextRequest) => {
   // Get session from cookies for app directory
   const session = await getServerSession(authOptions);
   
   return {
-    session,
+    session: session as any,
   };
 };
 
