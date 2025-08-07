@@ -4,3 +4,16 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
+
+/* Prevent white background flash on iOS/macOS bounce scroll */
+html,
+body {
+  height: 100%;
+  min-height: 100%;
+  background: linear-gradient(135deg, #0b1220, #0f172a, #0b1220);
+  color: #fff;
+  overscroll-behavior: none;
+}
+
+/* Ensure root takes full height */
+:root, #__next { height: 100%; }

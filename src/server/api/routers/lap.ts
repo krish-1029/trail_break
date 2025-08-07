@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import type { LapData, TelemetryPoint, TelemetryChunk } from "@/types/telemetry";
 import { db } from "@/lib/firebase";
 import { 
@@ -12,7 +12,6 @@ import {
   where, 
   deleteDoc,
   orderBy,
-  limit,
   Timestamp 
 } from "firebase/firestore";
 
@@ -103,17 +102,18 @@ const chunkTelemetryData = (points: TelemetryPoint[], chunkSize = 500): Telemetr
 };
 
 // Helper function to store telemetry chunks
-const storeTelemetryChunks = async (lapId: string, telemetryPoints: TelemetryPoint[]): Promise<number> => {
+const storeTelemetryChunks = async (lapId: string, telemetryPoints: TelemetryPoint[], userId: string): Promise<number> => {
   const chunks = chunkTelemetryData(telemetryPoints, 500); // 500 points per chunk (~400KB each)
   
   const chunkPromises = chunks.map(async (chunkPoints, index) => {
     const chunkData: Omit<TelemetryChunk, 'id'> = {
       lapId,
+      userId, // Associate chunks with user
       chunkIndex: index,
-      startTime: chunkPoints[0]?.time || 0,
-      endTime: chunkPoints[chunkPoints.length - 1]?.time || 0,
+      startTime: chunkPoints[0]?.time ?? 0,
+      endTime: chunkPoints[chunkPoints.length - 1]?.time ?? 0,
       points: chunkPoints,
-      createdAt: Timestamp.now() as any,
+      createdAt: Timestamp.now().toDate(),
     };
     
     return addDoc(collection(db, "telemetryChunks"), chunkData);
@@ -124,11 +124,12 @@ const storeTelemetryChunks = async (lapId: string, telemetryPoints: TelemetryPoi
 };
 
 // Helper function to load telemetry chunks
-const loadTelemetryChunks = async (lapId: string): Promise<TelemetryPoint[]> => {
+const loadTelemetryChunks = async (lapId: string, userId: string): Promise<TelemetryPoint[]> => {
   try {
     const chunksQuery = query(
       collection(db, "telemetryChunks"),
       where("lapId", "==", lapId),
+      where("userId", "==", userId), // Only load chunks for the current user
       orderBy("chunkIndex", "asc")
     );
     
@@ -150,15 +151,16 @@ const loadTelemetryChunks = async (lapId: string): Promise<TelemetryPoint[]> => 
   }
 };
 
-// Note: Demo data functions removed - only real telemetry data will be stored
-
 export const lapRouter = createTRPCRouter({
   // Create a new lap with chunked telemetry storage
-  create: publicProcedure
+  create: protectedProcedure
     .input(createLapSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      
       // Store lap metadata first
       const lapDoc = {
+        userId, // Associate lap with user
         lapTime: input.lapTime,
         date: new Date().toISOString().split('T')[0]!,
         car: input.car,
@@ -175,7 +177,7 @@ export const lapRouter = createTRPCRouter({
       const docRef = await addDoc(collection(db, "laps"), lapDoc);
       
       // Store telemetry data in chunks
-      const chunkCount = await storeTelemetryChunks(docRef.id, input.telemetryPoints);
+      const chunkCount = await storeTelemetryChunks(docRef.id, input.telemetryPoints, userId);
       
       return {
         id: docRef.id,
@@ -186,79 +188,106 @@ export const lapRouter = createTRPCRouter({
       };
     }),
 
-  // Get a specific lap by ID with full telemetry data
-  getById: publicProcedure
+  // Get a specific lap by ID with full telemetry data (only if user owns it)
+  getById: protectedProcedure
     .input(getLapSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      
       const docSnap = await getDoc(doc(db, "laps", input.lapId));
       if (!docSnap.exists()) {
         throw new Error("Lap not found");
       }
       
-      const data = docSnap.data();
+      const data = docSnap.data() as Record<string, unknown>;
+      
+      // Check if this lap belongs to the current user
+      if (data.userId && data.userId !== userId) {
+        throw new Error("Unauthorized: This lap belongs to another user");
+      }
       
       // Check if this is a legacy lap with embedded telemetry or new chunked format
       let telemetryPoints: TelemetryPoint[] = [];
       
       if (data.telemetryPoints && Array.isArray(data.telemetryPoints)) {
         // Legacy lap with embedded telemetry data
-        telemetryPoints = data.telemetryPoints;
+        telemetryPoints = data.telemetryPoints as TelemetryPoint[];
       } else {
         // New format - load from chunks
-        telemetryPoints = await loadTelemetryChunks(input.lapId);
+        telemetryPoints = await loadTelemetryChunks(input.lapId, userId);
       }
       
       return {
         id: docSnap.id,
-        lapTime: data.lapTime,
-        date: data.date,
-        car: data.car,
-        track: data.track,
-        conditions: data.conditions,
-        avgSpeed: data.avgSpeed,
-        maxSpeed: data.maxSpeed,
-        totalDataPoints: data.totalDataPoints || telemetryPoints.length,
-        chunkCount: data.chunkCount || 0,
+        lapTime: data.lapTime as string,
+        date: data.date as string,
+        car: data.car as string,
+        track: data.track as string,
+        conditions: data.conditions as string,
+        avgSpeed: data.avgSpeed as number,
+        maxSpeed: data.maxSpeed as number,
+        totalDataPoints: (data.totalDataPoints as number) ?? telemetryPoints.length,
+        chunkCount: (data.chunkCount as number) ?? 0,
         telemetryPoints, // Full data (either legacy or from chunks)
-        sectorTimes: data.sectorTimes,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-      } as LapData;
+        sectorTimes: data.sectorTimes as { sector1: number; sector2: number; sector3: number },
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt as Date,
+      } satisfies LapData;
     }),
 
-  // Get all laps (without full telemetry data for performance)
-  getAll: publicProcedure
-    .query(async () => {
-      const q = query(collection(db, "laps"), orderBy("createdAt", "desc"));
+  // Get all laps for the current user (without full telemetry data for performance)
+  getAll: protectedProcedure
+    .query(async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      
+      const q = query(
+        collection(db, "laps"), 
+        where("userId", "==", userId), // Only get laps for current user
+        orderBy("createdAt", "desc") // Now that index is created, we can use database-level ordering
+      );
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map(doc => {
-        const data = doc.data();
+        const data = doc.data() as Record<string, unknown>;
         return {
           id: doc.id,
-          lapTime: data.lapTime,
-          date: data.date,
-          car: data.car,
-          track: data.track,
-          conditions: data.conditions,
-          avgSpeed: data.avgSpeed,
-          maxSpeed: data.maxSpeed,
-          totalDataPoints: data.totalDataPoints || 0,
-          chunkCount: data.chunkCount || 0,
+          lapTime: data.lapTime as string,
+          date: data.date as string,
+          car: data.car as string,
+          track: data.track as string,
+          conditions: data.conditions as string,
+          avgSpeed: data.avgSpeed as number,
+          maxSpeed: data.maxSpeed as number,
+          totalDataPoints: (data.totalDataPoints as number) ?? 0,
+          chunkCount: (data.chunkCount as number) ?? 0,
           telemetryPoints: [], // Empty for list view performance
-          sectorTimes: data.sectorTimes,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-        } as LapData;
-      });
+          sectorTimes: data.sectorTimes as { sector1: number; sector2: number; sector3: number },
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt as Date,
+        } satisfies LapData;
+      }); // No need for in-memory sorting since database handles it efficiently
     }),
 
-  // Delete a lap and all its telemetry chunks
-  delete: publicProcedure
+  // Delete a lap and all its telemetry chunks (only if user owns it)
+  delete: protectedProcedure
     .input(getLapSchema)
-    .mutation(async ({ input }) => {
-      // Delete all telemetry chunks first
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      
+      // First check if the lap exists and belongs to the user
+      const docSnap = await getDoc(doc(db, "laps", input.lapId));
+      if (!docSnap.exists()) {
+        throw new Error("Lap not found");
+      }
+      
+      const data = docSnap.data();
+      if (data.userId && data.userId !== userId) {
+        throw new Error("Unauthorized: This lap belongs to another user");
+      }
+      
+      // Delete all telemetry chunks for this user's lap
       const chunksQuery = query(
         collection(db, "telemetryChunks"),
-        where("lapId", "==", input.lapId)
+        where("lapId", "==", input.lapId),
+        where("userId", "==", userId)
       );
       const chunksSnapshot = await getDocs(chunksQuery);
       

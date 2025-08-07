@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import type { TelemetryPoint } from "@/types/telemetry";
 
@@ -51,10 +52,10 @@ const getPerformanceColor = (point: TelemetryPoint): string => {
 
 export default function LapAnalysisPage() {
   const params = useParams();
-  const lapId = params.lapId as string;
+  const lapId = params?.lapId as string;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<TelemetryPoint | null>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
   const [visualizationMode, setVisualizationMode] = useState<VisualizationMode>('pedals');
   const [arrowMode, setArrowMode] = useState<'orientation' | 'trajectory' | 'both'>('orientation');
   const [isFrozen, setIsFrozen] = useState(false);
@@ -69,10 +70,23 @@ export default function LapAnalysisPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
-  // Fetch lap data using tRPC
-  const { data: lapData, isLoading, error } = api.lap.getById.useQuery({
-    lapId: lapId
-  });
+  const { data: session } = useSession();
+
+  // Private fetch (requires auth)
+  const { data: privateLap, isLoading: loadingPrivate, error: errorPrivate } = api.lap.getById.useQuery(
+    { lapId },
+    { enabled: !!session && !!lapId }
+  );
+
+  // Public fallback for featured laps
+  const { data: publicLap, isLoading: loadingPublic, error: errorPublic } = api.leaderboard.getLapPublic.useQuery(
+    { lapId },
+    { enabled: !session && !!lapId }
+  );
+
+  const lapData = privateLap ?? publicLap;
+  const isLoading = loadingPrivate || loadingPublic;
+  const error = (errorPrivate as any) ?? (errorPublic as any);
 
   // Add global mouse up listener to handle drag outside canvas
   useEffect(() => {
@@ -177,7 +191,7 @@ export default function LapAnalysisPage() {
           case 'tires':
             // Tire temperature visualization
             if (point.tyreTemperature && point.tyreTemperature.length >= 4) {
-              const avgTemp = point.tyreTemperature.reduce((a, b) => a + b, 0) / 4;
+              const avgTemp = point.tyreTemperature.reduce((a: number, b: number) => a + b, 0) / 4;
               color = getTireTemperatureColor(avgTemp);
             } else {
               color = "rgb(100, 100, 100)";
@@ -310,7 +324,6 @@ export default function LapAnalysisPage() {
       
       // Draw checkered pattern
       const numSegments = 8;
-      const segmentLength = lineLength / numSegments;
       
       for (let i = 0; i < numSegments; i++) {
         const t1 = i / numSegments;
@@ -493,7 +506,7 @@ export default function LapAnalysisPage() {
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
-    setMousePos({ x: event.clientX, y: event.clientY });
+  
 
     // Calculate same coordinate transformation as in drawing
     const xCoords = lapData.telemetryPoints.map(p => p.x);
@@ -718,9 +731,9 @@ export default function LapAnalysisPage() {
       <div className="max-w-[1800px] mx-auto px-6 py-8">
       {/* Header */}
         <div className="mb-8">
-          <Link href="/data" className="inline-flex items-center text-blue-400 hover:text-blue-300 transition-colors mb-6">
-            ← Back to Laps
-              </Link>
+          <Link href={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'leaderboard' ? '/landing' : '/data'} className="inline-flex items-center text-blue-400 hover:text-blue-300 transition-colors mb-6">
+            ← {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'leaderboard' ? 'Back to Home' : 'Back to Laps'}
+          </Link>
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-red-400 to-red-200 bg-clip-text text-transparent">
             Lap Analysis
           </h1>
