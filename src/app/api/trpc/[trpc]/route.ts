@@ -10,7 +10,7 @@ import { appRouter } from "@/server/api/root";
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
  * handling a HTTP request (e.g. when you make requests from Client Components).
  */
-const createContext = async (_req: NextRequest) => {
+const createContext = async (): Promise<{ session: any }> => {
   // Get session from cookies for app directory
   const session = await getServerSession(authOptions);
   
@@ -24,7 +24,7 @@ const handler = (req: NextRequest) =>
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: () => createContext(req),
+    createContext: () => createContext(),
     onError:
       env.NODE_ENV === "development"
         ? ({ path, error }) => {

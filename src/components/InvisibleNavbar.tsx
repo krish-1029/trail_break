@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import AuthButton from "./AuthButton";
 
 export default function InvisibleNavbar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  // Don't show navbar on dashboard pages when user is logged in
+  if (session && (pathname?.startsWith("/data") || pathname?.startsWith("/profile") || pathname?.startsWith("/settings"))) {
+    return null;
+  }
 
   return (
     <nav className="absolute top-0 left-0 right-0 z-50">

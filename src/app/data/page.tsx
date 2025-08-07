@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
-import AuthButton from "@/components/AuthButton";
+import DashboardLayout from "@/components/DashboardLayout";
 
 export default function DataDashboard() {
   const { data: session } = useSession();
@@ -68,59 +68,40 @@ export default function DataDashboard() {
       })
     : null;
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col items-center justify-center text-white">
-        {/* Home Arrow Button */}
-        <div className="absolute top-6 left-6">
-          <Link
-            href="/landing"
-            className="inline-flex items-center gap-2 px-4 py-2 text-white hover:text-red-400 transition-colors group"
-          >
-            <svg className="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span className="font-medium">Home</span>
-          </Link>
-        </div>
-
-        <h1 className="text-4xl font-bold mb-4">Welcome to Trail Break</h1>
-        <p className="text-xl mb-8">Please sign in to view your lap data.</p>
-        <AuthButton />
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center text-white">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xl">Loading your lap data...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-xl text-white">Loading your lap data...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center text-white">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-4">Error loading data</h1>
-          <p className="text-red-400 mb-4">{error.message}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
-          >
-            Try Again
-          </button>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold mb-4 text-white">Error loading data</h1>
+            <p className="text-red-400 mb-4">{error.message}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+    <DashboardLayout>
       {/* Delete Confirmation Dialog */}
       {deleteConfirm.isOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -153,14 +134,11 @@ export default function DataDashboard() {
         </div>
       )}
 
-      <div className="px-4 py-8 max-w-7xl mx-auto">
+      <div className="text-white">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Data Dashboard</h1>
-            <p className="text-slate-400">Analyze your lap times and telemetry data</p>
-          </div>
-          <AuthButton />
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">Data Dashboard</h1>
+          <p className="text-gray-400">Analyze your lap times and telemetry data</p>
         </div>
 
         {/* Track Filter and View Toggle */}
@@ -169,12 +147,13 @@ export default function DataDashboard() {
             <label htmlFor="track-filter" className="block text-sm font-medium text-slate-300 mb-2">
               Filter by Track
             </label>
-            <select
-              id="track-filter"
-              value={selectedTrack}
-              onChange={(e) => setSelectedTrack(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
+            <div className="relative">
+              <select
+                id="track-filter"
+                value={selectedTrack}
+                onChange={(e) => setSelectedTrack(e.target.value)}
+                className="w-full px-4 py-3 pr-10 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none"
+              >
               <option value="all">All Tracks ({allLaps.length} laps)</option>
               {uniqueTracks.map((track) => {
                 const trackLapCount = allLaps.filter(lap => lap.track === track).length;
@@ -185,7 +164,14 @@ export default function DataDashboard() {
                 );
               })}
             </select>
+            {/* Custom dropdown arrow */}
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
+        </div>
           <div className="flex flex-col">
             <label className="block text-sm font-medium text-slate-300 mb-2">View Mode</label>
             <div className="flex gap-2">
@@ -413,6 +399,6 @@ export default function DataDashboard() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 } 

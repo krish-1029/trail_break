@@ -21,8 +21,14 @@ export const authOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        // Try to find user by email or username
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: credentials.email },
+              { username: credentials.email }, // Allow using username in email field
+            ],
+          },
         });
 
                     if (!user?.password) {

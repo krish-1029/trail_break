@@ -24,10 +24,16 @@ export default function LandingPage() {
               View Your Laps
             </Link>
             <Link
-              href="#features"
+              href="/leaderboard"
+              className="flex items-center justify-center px-12 py-4 text-xl font-semibold text-white bg-gradient-to-r from-yellow-600 to-yellow-400 rounded-xl hover:from-yellow-700 hover:to-yellow-500 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Leaderboard
+            </Link>
+            <Link
+              href="/how-it-works"
               className="flex items-center justify-center px-12 py-4 text-xl font-semibold text-white bg-white/5 border border-white/20 rounded-xl hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
             >
-              Learn More
+              How It Works
             </Link>
           </div>
         </div>

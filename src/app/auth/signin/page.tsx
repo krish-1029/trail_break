@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function SignInPage() {
+function SignInContent() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -13,6 +13,17 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const sp = searchParams;
+    if (!sp) return;
+    const mode = sp.get("mode");
+    const signup = sp.get("signup");
+    if (mode === "signup" || signup === "1" || signup === "true") {
+      setIsSignUp(true);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,16 +122,16 @@ export default function SignInPage() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                Email Address
+                {isSignUp ? "Email Address" : "Email or Username"}
               </label>
               <input
                 id="email"
-                type="email"
+                type={isSignUp ? "email" : "text"}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="Enter your email"
+                placeholder={isSignUp ? "Enter your email" : "Enter email or username"}
               />
             </div>
 
@@ -208,5 +219,22 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center text-white">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-xl">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <SignInContent />
+    </Suspense>
   );
 } 
