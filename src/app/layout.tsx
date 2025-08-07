@@ -23,8 +23,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
-      <body className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen">
+    <html lang="en" className={`${geist.variable} h-full`}>
+      <body className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen h-full overscroll-none">
         <Providers>
           <TRPCReactProvider>
             <InvisibleNavbar />
