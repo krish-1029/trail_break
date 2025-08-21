@@ -11,6 +11,21 @@ const config = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          // Minimal, safe defaults; tune as needed
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Only enable HSTS in production and on HTTPS
+          // max-age=6 months, includeSubDomains, preload (optional)
+          { key: "Strict-Transport-Security", value: "max-age=15552000; includeSubDomains" },
+        ],
+      },
+    ];
+  },
 };
 
 export default config;

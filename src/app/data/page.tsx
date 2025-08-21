@@ -76,7 +76,7 @@ export default function DataDashboard() {
             <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-xl text-white">Loading your lap data...</p>
           </div>
-        </div>
+      </div>
       </DashboardLayout>
     );
   }
@@ -95,7 +95,7 @@ export default function DataDashboard() {
               Try Again
             </button>
           </div>
-        </div>
+      </div>
       </DashboardLayout>
     );
   }
@@ -139,7 +139,7 @@ export default function DataDashboard() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Data Dashboard</h1>
           <p className="text-gray-400">Analyze your lap times and telemetry data</p>
-        </div>
+              </div>
 
         {/* Track Filter and View Toggle */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
@@ -171,7 +171,7 @@ export default function DataDashboard() {
               </svg>
             </div>
           </div>
-        </div>
+                  </div>
           <div className="flex flex-col">
             <label className="block text-sm font-medium text-slate-300 mb-2">View Mode</label>
             <div className="flex gap-2">
@@ -288,91 +288,91 @@ export default function DataDashboard() {
               </div>
             ) : (
               /* List View */
-              <div className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl overflow-hidden">
-                <div className="px-6 py-6 border-b border-white/10">
-                  <h2 className="text-2xl font-semibold text-blue-400">Recorded Laps</h2>
-                  <p className="text-slate-400 text-sm mt-1">
-                    Click on any lap to view detailed telemetry analysis
-                  </p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-white/5 border-b border-white/10">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Lap Time
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Car
-                        </th>
-                        {selectedTrack === "all" && (
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                            Track
-                          </th>
-                        )}
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Avg Speed
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Max Speed
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Conditions
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {laps.map((lap) => (
-                        <tr key={lap.id} className="hover:bg-white/5 transition-colors">
-                          <td className="px-6 py-5 whitespace-nowrap">
-                            <div className="text-lg font-semibold text-white">{lap.lapTime}</div>
-                            {bestLap && lap.id === bestLap.id && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500 text-white mt-1">
-                                Best
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-slate-300">
-                            {lap.date}
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-slate-300 font-medium">
-                            {lap.car}
-                          </td>
-                          {selectedTrack === "all" && (
-                            <td className="px-6 py-5 whitespace-nowrap text-slate-300">
-                              <div className="font-medium">{lap.track}</div>
-                            </td>
-                          )}
-                          <td className="px-6 py-5 whitespace-nowrap text-slate-300">
-                            {lap.avgSpeed.toFixed(1)} km/h
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-slate-300">
-                            {lap.maxSpeed.toFixed(1)} km/h
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap">
-                            <div className="text-sm">
-                              <div className="text-slate-300 font-medium">
-                                {lap.conditions || 'Dry'}
-                              </div>
-                              <div className="text-xs text-slate-400">
-                                Standard
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap">
+        <div className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl overflow-hidden">
+          <div className="px-6 py-6 border-b border-white/10">
+            <h2 className="text-2xl font-semibold text-blue-400">Recorded Laps</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              Click on any lap to view detailed telemetry analysis
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-white/5 border-b border-white/10">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Lap Time
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Car
+                  </th>
+                  {selectedTrack === "all" && (
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Track
+                    </th>
+                  )}
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Avg Speed
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Max Speed
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Conditions
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {laps.map((lap) => (
+                  <tr key={lap.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="text-lg font-semibold text-white">{lap.lapTime}</div>
+                      {bestLap && lap.id === bestLap.id && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500 text-white mt-1">
+                          Best
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap text-slate-300">
+                      {lap.date}
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap text-slate-300 font-medium">
+                      {lap.car}
+                    </td>
+                    {selectedTrack === "all" && (
+                      <td className="px-6 py-5 whitespace-nowrap text-slate-300">
+                        <div className="font-medium">{lap.track}</div>
+                      </td>
+                    )}
+                    <td className="px-6 py-5 whitespace-nowrap text-slate-300">
+                      {lap.avgSpeed.toFixed(1)} km/h
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap text-slate-300">
+                      {lap.maxSpeed.toFixed(1)} km/h
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="text-sm">
+                        <div className="text-slate-300 font-medium">
+                          {lap.conditions || 'Dry'}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Standard
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap">
                             <div className="flex gap-2">
-                              <Link
-                                href={`/data/${lap.id}`}
-                                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-gradient-to-r from-red-600 to-red-400 hover:from-red-700 hover:to-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
-                              >
-                                Analyze
-                              </Link>
+                      <Link
+                        href={`/data/${lap.id}`}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-gradient-to-r from-red-600 to-red-400 hover:from-red-700 hover:to-red-500 transition-all duration-200 shadow-lg hover:shadow-xl"
+                      >
+                        Analyze
+                      </Link>
                               <button
                                 onClick={() => handleDeleteLap(lap.id, lap.track)}
                                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200"
@@ -383,13 +383,13 @@ export default function DataDashboard() {
                                 </svg>
                               </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
             )}
           </>
         ) : (

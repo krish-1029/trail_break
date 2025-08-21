@@ -728,12 +728,12 @@ export default function LapAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
-      <div className="max-w-[1800px] mx-auto px-6 py-8">
+        <div className="max-w-[1800px] mx-auto px-6 py-8">
       {/* Header */}
         <div className="mb-8">
           <Link href={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'leaderboard' ? '/landing' : '/data'} className="inline-flex items-center text-blue-400 hover:text-blue-300 transition-colors mb-6">
             ← {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'leaderboard' ? 'Back to Home' : 'Back to Laps'}
-          </Link>
+              </Link>
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-red-400 to-red-200 bg-clip-text text-transparent">
             Lap Analysis
           </h1>
@@ -1107,7 +1107,7 @@ export default function LapAnalysisPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-2 bg-green-300 rounded"></div>
                         <span>Accelerating</span>
-                      </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-2 bg-gray-300 rounded"></div>
                   <span>Coasting</span>
@@ -1292,12 +1292,12 @@ export default function LapAnalysisPage() {
                       </span>
             </div>
                   )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+            )}
       </div>
+        </div>
+        </div>
     </div>
   );
 } 

@@ -13,7 +13,7 @@ import { getServerSession } from "next-auth/next";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { authOptions } from "@/server/auth";
 
 /**
  * 1. CONTEXT
@@ -29,7 +29,8 @@ import { authOptions } from "@/pages/api/auth/[...nextauth]";
  */
 
 interface CreateContextOptions {
-  session: Session | null;
+	session: Session | null;
+	headers?: Headers;
 }
 
 /**
@@ -43,9 +44,10 @@ interface CreateContextOptions {
  * @see https://create.t3.gg/en/usage/trpc#-serverapitrpcts
  */
 const createInnerTRPCContext = (opts: CreateContextOptions) => {
-  return {
-    session: opts.session,
-  };
+	return {
+		session: opts.session,
+		headers: opts.headers,
+	};
 };
 
 /**
@@ -55,25 +57,27 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
  * @see https://trpc.io/docs/context
  */
 export const createTRPCContext = async (
-  opts: CreateNextContextOptions | { headers: Headers }
+	opts: CreateNextContextOptions | { headers: Headers }
 ) => {
-  let session: Session | null = null;
+	let session: Session | null = null;
+	let headers: Headers | undefined = undefined;
 
-  // Check if this is from the app directory (has headers) or pages directory (has req/res)
-  if ("headers" in opts) {
-    // App directory - we need to get the session differently
-    // For now, we'll leave session as null for app directory requests
-    // The client-side will handle authentication
-    session = null;
-  } else {
-    // Pages directory - use the traditional req/res approach
-    const { req, res } = opts;
-    session = await getServerSession(req, res, authOptions);
-  }
+	// Support both App Router (headers) and Pages Router (req/res)
+	if ("headers" in opts) {
+		// App Router - use getServerSession without req/res
+		session = await getServerSession(authOptions as any);
+		headers = opts.headers;
+	} else {
+		// Pages Router - use the traditional req/res approach
+		const { req, res } = opts;
+		session = await getServerSession(req, res, authOptions as any);
+		headers = req.headers as unknown as Headers;
+	}
 
-  return createInnerTRPCContext({
-    session,
-  });
+	return createInnerTRPCContext({
+		session,
+		headers,
+	});
 };
 
 /**
@@ -84,17 +88,17 @@ export const createTRPCContext = async (
  * errors on the backend.
  */
 const t = initTRPC.context<typeof createTRPCContext>().create({
-  transformer: superjson,
-  errorFormatter({ shape, error }) {
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
-      },
-    };
-  },
+	transformer: superjson,
+	errorFormatter({ shape, error }) {
+		return {
+			...shape,
+			data: {
+				...shape.data,
+				zodError:
+					error.cause instanceof ZodError ? error.cause.flatten() : null,
+			},
+		};
+	},
 });
 
 /**
@@ -125,20 +129,20 @@ export const createTRPCRouter = t.router;
  * network latency that would occur in production but not in local development.
  */
 const timingMiddleware = t.middleware(async ({ next, path }) => {
-  const start = Date.now();
+	const start = Date.now();
 
-  if (t._config.isDev) {
-    // artificial delay in dev
-    const waitMs = Math.floor(Math.random() * 400) + 100;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
+	if (t._config.isDev) {
+		// artificial delay in dev
+		const waitMs = Math.floor(Math.random() * 400) + 100;
+		await new Promise((resolve) => setTimeout(resolve, waitMs));
+	}
 
-  const result = await next();
+	const result = await next();
 
-  const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+	const end = Date.now();
+	console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
 
-  return result;
+	return result;
 });
 
 /**
@@ -159,15 +163,16 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.session?.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        // infers the `session` as non-nullable
-        session: { ...ctx.session, user: ctx.session.user },
-      },
-    });
-  });
+	.use(timingMiddleware)
+	.use(({ ctx, next }) => {
+		if (!ctx.session?.user) {
+			throw new TRPCError({ code: "UNAUTHORIZED" });
+		}
+		return next({
+			ctx: {
+				// infers the `session` as non-nullable
+				session: { ...ctx.session, user: ctx.session.user },
+				headers: ctx.headers,
+			},
+		});
+	});

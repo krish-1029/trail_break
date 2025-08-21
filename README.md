@@ -51,23 +51,35 @@ NextAuth (Credentials) + Prisma + Postgres (users, sessions)
 - A Firebase project (Firestore enabled)
 
 ## Environment Variables
-Create `.env.local` in the project root:
 
-Required (server):
-- `DATABASE_URL` — Postgres connection string
-- `NEXTAUTH_SECRET` — Random secret for JWT/session
-- `NEXTAUTH_URL` — Base URL (e.g. `http://localhost:3000`)
+Create `.env.local` in the project root.
 
-Firebase (client):
-- `NEXT_PUBLIC_FIREBASE_API_KEY`
-- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
-- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
-- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
-- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-- `NEXT_PUBLIC_FIREBASE_APP_ID`
-- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` (optional)
+Client (public):
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+```
 
-If any Firebase values are missing, `src/lib/firebase.ts` will throw at startup.
+Server (private):
+```
+DATABASE_URL=
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
+
+# Optional: enable Firebase Admin on the server
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+Notes:
+- Do not prefix server secrets with `NEXT_PUBLIC_`.
+- Admin SDK is optional; if set, server routes use Admin; otherwise they fall back to the Web SDK.
 
 ## Install & Develop
 ```bash

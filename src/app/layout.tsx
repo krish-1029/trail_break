@@ -4,7 +4,6 @@ import "@/styles/globals.css";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
-import { TRPCReactProvider } from "@/trpc/react";
 import { Providers } from "./providers";
 import InvisibleNavbar from "@/components/InvisibleNavbar";
 
@@ -26,10 +25,8 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable} h-full`}>
       <body className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen h-full overscroll-none">
         <Providers>
-          <TRPCReactProvider>
-            <InvisibleNavbar />
-            {children}
-          </TRPCReactProvider>
+          <InvisibleNavbar />
+          {children}
         </Providers>
       </body>
     </html>

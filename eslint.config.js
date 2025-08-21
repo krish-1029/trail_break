@@ -24,8 +24,8 @@ const config = [
       "@typescript-eslint/prefer-nullish-coalescing": "off",
       "@typescript-eslint/no-unused-vars": "warn", // Downgrade to warning
       "@next/next/no-img-element": "warn", // Downgrade to warning
+      },
     },
-  },
 ];
 
 export default config;
