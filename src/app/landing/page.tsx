@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useSession } from "next-auth/react";
 
 // Track Map Preview Component
 function TrackMapPreview() {
@@ -303,6 +304,7 @@ function TelemetryDataPreview() {
 }
 
 export default function LandingPage() {
+  const { data: session } = useSession();
   const [showArrow, setShowArrow] = useState(true);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -437,7 +439,7 @@ export default function LandingPage() {
           <div className="relative z-10 flex-shrink-0">
            <div className="flex flex-col sm:flex-row gap-4 justify-center">
              <Link
-               href="/data"
+               href={session ? "/data" : "/auth/signin"}
                className="group relative flex items-center justify-center w-40 py-3 text-lg font-medium text-white bg-black/30 border border-red-500/40 rounded-lg backdrop-blur-md hover:bg-black/40 hover:border-red-500/60 hover:shadow-lg hover:shadow-red-500/20 transition-all duration-300 overflow-hidden"
              >
                <span className="relative z-10">Dashboard</span>
