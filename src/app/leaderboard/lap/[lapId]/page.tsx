@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/trpc/react";
-import TrackMap from "@/components/TrackMap";
+import TrackMapPro from "@/components/TrackMapPro";
 
 export default function PublicLapPage() {
   const params = useParams();
@@ -65,7 +65,7 @@ export default function PublicLapPage() {
 
         {/* Map */}
         <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-          <TrackMap telemetryData={data.telemetryPoints ?? []} />
+          <TrackMapPro telemetryPoints={data.telemetryPoints ?? []} showControls={false} />
         </div>
       </div>
     </div>

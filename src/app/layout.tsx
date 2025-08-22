@@ -23,10 +23,14 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
-      <body className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen h-full overscroll-none">
+      <body className="text-white min-h-screen h-full overscroll-none bg-transparent">
         <Providers>
-          <InvisibleNavbar />
-          {children}
+          <div className="relative z-10">
+            <InvisibleNavbar />
+            <div className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+              {children}
+            </div>
+          </div>
         </Providers>
       </body>
     </html>

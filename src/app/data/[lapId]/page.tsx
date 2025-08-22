@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+import TrackMapPro from "@/components/TrackMapPro";
 import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import type { TelemetryPoint } from "@/types/telemetry";
@@ -10,65 +11,36 @@ import type { TelemetryPoint } from "@/types/telemetry";
 // Visualization modes for different data displays
 type VisualizationMode = 'pedals' | 'tires' | 'gforce' | 'performance' | 'grip';
 
-// Helper function to get tire temperature color
-const getTireTemperatureColor = (temp: number): string => {
-  if (temp < 60) return 'rgb(0, 100, 255)';     // Cold - Blue
-  if (temp < 80) return 'rgb(0, 255, 100)';     // Cool - Green  
-  if (temp < 100) return 'rgb(255, 255, 0)';    // Optimal - Yellow
-  if (temp < 120) return 'rgb(255, 150, 0)';    // Hot - Orange
-  return 'rgb(255, 0, 0)';                      // Overheated - Red
+
+
+// Helper functions for data analysis used by the sidebar
+const getMaxTireTemp = (point: TelemetryPoint): number => {
+  return point.tyreTemperature ? Math.max(...point.tyreTemperature) : 0;
 };
 
-// Helper function to get grip level color
-const getGripLevelColor = (grip: number): string => {
-  if (grip < 0.8) return 'rgb(255, 100, 100)';  // Low grip - Red
-  if (grip < 0.9) return 'rgb(255, 200, 100)';  // Medium grip - Orange
-  if (grip < 0.95) return 'rgb(255, 255, 100)'; // Good grip - Yellow
-  return 'rgb(100, 255, 100)';                  // High grip - Green
+const getAverageTireTemp = (point: TelemetryPoint): number => {
+  return point.tyreTemperature && point.tyreTemperature.length > 0 
+    ? point.tyreTemperature.reduce((a, b) => a + b, 0) / point.tyreTemperature.length 
+    : 0;
 };
 
-// Helper function to get G-force color intensity
-const getGForceColor = (gForceX: number, gForceY: number, gForceZ: number): string => {
-  const totalG = Math.sqrt(gForceX * gForceX + gForceY * gForceY + gForceZ * gForceZ);
-  const intensity = Math.min(totalG / 3.0, 1.0); // Normalize to 3G max
-  const red = Math.floor(255 * intensity);
-  const green = Math.floor(255 * (1 - intensity));
-  return `rgb(${red}, ${green}, 0)`;
-};
-
-// Helper function to get performance zone color
-const getPerformanceColor = (point: TelemetryPoint): string => {
-  const maxThrottle = point.throttle > 0.8;
-  const hardBraking = point.brake > 0.6;
-  const highSpeed = point.speed > 200;
-  const tireSlip = point.wheelSlip && Math.max(...point.wheelSlip) > 0.1;
-  
-  if (hardBraking) return 'rgb(255, 0, 0)';      // Braking - Red
-  if (maxThrottle && highSpeed) return 'rgb(0, 255, 0)'; // Fast - Green
-  if (tireSlip) return 'rgb(255, 100, 255)';     // Slipping - Magenta
-  if (maxThrottle) return 'rgb(100, 255, 100)';  // Accelerating - Light Green
-  return 'rgb(200, 200, 200)';                   // Coasting - Gray
+const getTotalGForce = (point: TelemetryPoint): number => {
+  const x = point.gForceX || 0;
+  const y = point.gForceY || 0;
+  const z = point.gForceZ || 0;
+  return Math.sqrt(x * x + y * y + z * z);
 };
 
 export default function LapAnalysisPage() {
   const params = useParams();
   const lapId = params?.lapId as string;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<TelemetryPoint | null>(null);
 
   const [visualizationMode, setVisualizationMode] = useState<VisualizationMode>('pedals');
   const [arrowMode, setArrowMode] = useState<'orientation' | 'trajectory' | 'both'>('orientation');
   const [isFrozen, setIsFrozen] = useState(false);
-  const [frozenPoint, setFrozenPoint] = useState<TelemetryPoint | null>(null);
-  const [isDraggingDot, setIsDraggingDot] = useState(false);
+
   const [telemetryDropdownOpen, setTelemetryDropdownOpen] = useState(true);
-  
-  // Zoom and pan state
-  const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
   const { data: session } = useSession();
 
@@ -87,628 +59,6 @@ export default function LapAnalysisPage() {
   const lapData = privateLap ?? publicLap;
   const isLoading = loadingPrivate || loadingPublic;
   const error = (errorPrivate as any) ?? (errorPublic as any);
-
-  // Add global mouse up listener to handle drag outside canvas
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener('mouseup', handleGlobalMouseUp);
-      return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
-    }
-  }, [isDragging]);
-
-  // Enhanced track map and racing line drawing
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !lapData) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Set canvas size
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-
-    // Draw background
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Calculate coordinate bounds for auto-scaling
-    const xCoords = lapData.telemetryPoints.map(p => p.x);
-    const zCoords = lapData.telemetryPoints.map(p => p.z);
-    const minX = Math.min(...xCoords);
-    const maxX = Math.max(...xCoords);
-    const minZ = Math.min(...zCoords);
-    const maxZ = Math.max(...zCoords);
-    
-    // Add padding around the track
-    const padding = 50;
-    const xRange = maxX - minX;
-    const zRange = maxZ - minZ;
-    
-    // Calculate scale to fit track with aspect ratio preservation
-    const scaleX = (canvas.width - 2 * padding) / xRange;
-    const scaleZ = (canvas.height - 2 * padding) / zRange;
-    const scale = Math.min(scaleX, scaleZ);
-    
-    // Calculate offsets to center the track with zoom and pan
-    const baseOffsetX = padding + (canvas.width - 2 * padding - xRange * scale) / 2;
-    const baseOffsetY = padding + (canvas.height - 2 * padding - zRange * scale) / 2;
-    
-    // Apply zoom and pan transformations
-    const zoomedScale = scale * zoom;
-    const offsetX = baseOffsetX * zoom + panX;
-    const offsetY = baseOffsetY * zoom + panY;
-
-    // Draw enhanced racing line with selected visualization mode
-    if (lapData.telemetryPoints.length > 1) {
-      for (let i = 0; i < lapData.telemetryPoints.length - 1; i++) {
-        const point = lapData.telemetryPoints[i];
-        const nextPoint = lapData.telemetryPoints[i + 1];
-
-        if (!point || !nextPoint) continue;
-
-        // Scale coordinates to fit canvas with zoom and pan
-        const x1 = (point.x - minX) * zoomedScale + offsetX;
-        const y1 = (point.z - minZ) * zoomedScale + offsetY;
-        const x2 = (nextPoint.x - minX) * zoomedScale + offsetX;
-        const y2 = (nextPoint.z - minZ) * zoomedScale + offsetY;
-
-        // Determine color based on visualization mode
-        let color: string;
-        
-        switch (visualizationMode) {
-          case 'pedals':
-            // Smooth pedal input visualization with fading
-            const brakeIntensity = Math.max(0, Math.min(point.brake, 1));
-            const throttleIntensity = Math.max(0, Math.min(point.throttle, 1));
-            
-            if (brakeIntensity > throttleIntensity) {
-              // Braking: fade from white (coasting) to red (full brake)
-              const red = 200 + Math.floor(55 * brakeIntensity);    // 200 -> 255
-              const green = Math.floor(200 * (1 - brakeIntensity)); // 200 -> 0  
-              const blue = Math.floor(200 * (1 - brakeIntensity));  // 200 -> 0
-              color = `rgb(${red}, ${green}, ${blue})`;
-            } else if (throttleIntensity > 0) {
-              // Throttle: fade from white (coasting) to green (full throttle)
-              const red = Math.floor(200 * (1 - throttleIntensity));   // 200 -> 0
-              const green = 200 + Math.floor(55 * throttleIntensity);  // 200 -> 255
-              const blue = Math.floor(200 * (1 - throttleIntensity));  // 200 -> 0
-              color = `rgb(${red}, ${green}, ${blue})`;
-        } else {
-              // Pure coasting - light gray
-              color = "rgb(200, 200, 200)";
-            }
-            break;
-            
-          case 'tires':
-            // Tire temperature visualization
-            if (point.tyreTemperature && point.tyreTemperature.length >= 4) {
-              const avgTemp = point.tyreTemperature.reduce((a: number, b: number) => a + b, 0) / 4;
-              color = getTireTemperatureColor(avgTemp);
-            } else {
-              color = "rgb(100, 100, 100)";
-            }
-            break;
-            
-          case 'gforce':
-            // G-force visualization
-            color = getGForceColor(point.gForceX, point.gForceY || 0, point.gForceZ);
-            break;
-            
-          case 'performance':
-            // Performance zone visualization
-            color = getPerformanceColor(point);
-            break;
-            
-          case 'grip':
-            // Surface grip visualization
-            color = getGripLevelColor(point.surfaceGrip || 1.0);
-            break;
-            
-          default:
-          color = "rgb(200, 200, 200)";
-        }
-
-        ctx.strokeStyle = color;
-        ctx.lineWidth = Math.max(2, 4 * zoom); // Scale line width with zoom
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-    }
-    
-    // Draw sector boundaries as lines cutting across the track
-    if (lapData.telemetryPoints.length > 0) {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-        ctx.lineWidth = 3;
-      ctx.setLineDash([8, 4]);
-      ctx.font = "12px sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      
-      let lastSector = -1;
-      lapData.telemetryPoints.forEach((point, index) => {
-        if (point.currentSector !== lastSector && lastSector !== -1) {
-          const x = (point.x - minX) * zoomedScale + offsetX;
-          const y = (point.z - minZ) * zoomedScale + offsetY;
-          
-          // Calculate track direction at this point for perpendicular line
-          let trackAngle = 0;
-          if (index > 0 && index < lapData.telemetryPoints.length - 1) {
-            const prevPoint = lapData.telemetryPoints[index - 1];
-            const nextPoint = lapData.telemetryPoints[index + 1];
-            if (prevPoint && nextPoint) {
-              const deltaX = nextPoint.x - prevPoint.x;
-              const deltaZ = nextPoint.z - prevPoint.z;
-              trackAngle = Math.atan2(deltaZ, deltaX);
-            }
-          }
-          
-          // Draw perpendicular line across track (90° to track direction)
-          const lineAngle = trackAngle + Math.PI / 2;
-          const lineLength = 30 * zoom; // Scale with zoom
-          const halfLength = lineLength / 2;
-          
-          const x1 = x - Math.cos(lineAngle) * halfLength;
-          const y1 = y - Math.sin(lineAngle) * halfLength;
-          const x2 = x + Math.cos(lineAngle) * halfLength;
-          const y2 = y + Math.sin(lineAngle) * halfLength;
-          
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-          
-          // Add sector transition label
-          const currentSector = point.currentSector || 0;
-          const label = `S${lastSector + 1}→S${currentSector + 1}`;
-          
-          // Position label slightly offset from the line
-          const labelOffset = 20 * zoom;
-          const labelX = x + Math.cos(lineAngle) * labelOffset;
-          const labelY = y + Math.sin(lineAngle) * labelOffset;
-          
-          // Draw label background
-          const textMetrics = ctx.measureText(label);
-          const padding = 4;
-          ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-          ctx.fillRect(
-            labelX - textMetrics.width / 2 - padding,
-            labelY - 6 - padding,
-            textMetrics.width + padding * 2,
-            12 + padding * 2
-          );
-          
-          // Draw label text
-          ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(label, labelX, labelY);
-        }
-        lastSector = point.currentSector || 0;
-      });
-      
-      ctx.setLineDash([]);
-    }
-    
-    // Draw start/finish line
-    if (lapData.telemetryPoints.length > 1) {
-      const startPoint = lapData.telemetryPoints[0];
-      const secondPoint = lapData.telemetryPoints[1];
-      
-      if (startPoint && secondPoint) {
-        const startX = (startPoint.x - minX) * zoomedScale + offsetX;
-        const startY = (startPoint.z - minZ) * zoomedScale + offsetY;
-        
-        // Calculate track direction at start for perpendicular line
-        const deltaX = secondPoint.x - startPoint.x;
-        const deltaZ = secondPoint.z - startPoint.z;
-      const trackAngle = Math.atan2(deltaZ, deltaX);
-      const lineAngle = trackAngle + Math.PI / 2;
-      
-      const lineLength = 40 * zoom;
-      const halfLength = lineLength / 2;
-      
-      const x1 = startX - Math.cos(lineAngle) * halfLength;
-      const y1 = startY - Math.sin(lineAngle) * halfLength;
-      const x2 = startX + Math.cos(lineAngle) * halfLength;
-      const y2 = startY + Math.sin(lineAngle) * halfLength;
-      
-      // Draw checkered pattern
-      const numSegments = 8;
-      
-      for (let i = 0; i < numSegments; i++) {
-        const t1 = i / numSegments;
-        const t2 = (i + 1) / numSegments;
-        
-        const segX1 = x1 + (x2 - x1) * t1;
-        const segY1 = y1 + (y2 - y1) * t1;
-        const segX2 = x1 + (x2 - x1) * t2;
-        const segY2 = y1 + (y2 - y1) * t2;
-        
-        // Alternate black and white segments
-        ctx.strokeStyle = i % 2 === 0 ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 0, 0, 0.9)";
-        ctx.lineWidth = 6;
-        ctx.setLineDash([]);
-        
-        ctx.beginPath();
-        ctx.moveTo(segX1, segY1);
-        ctx.lineTo(segX2, segY2);
-        ctx.stroke();
-      }
-      
-      // Add start/finish label
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      
-      // Position label offset from the line
-      const labelOffset = 25 * zoom;
-      const labelX = startX + Math.cos(lineAngle) * labelOffset;
-      const labelY = startY + Math.sin(lineAngle) * labelOffset;
-      
-      // Draw label background
-      const labelText = "START/FINISH";
-      const textMetrics = ctx.measureText(labelText);
-      const padding = 4;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.fillRect(
-        labelX - textMetrics.width / 2 - padding,
-        labelY - 6 - padding,
-        textMetrics.width + padding * 2,
-        12 + padding * 2
-      );
-      
-      // Draw label text
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.fillText(labelText, labelX, labelY);
-      }
-    }
-    
-    // Draw car position indicator when hovering or frozen
-    const activePoint = isFrozen ? frozenPoint : hoveredPoint;
-    if (activePoint) {
-      const carX = (activePoint.x - minX) * zoomedScale + offsetX;
-      const carY = (activePoint.z - minZ) * zoomedScale + offsetY;
-      
-      // Draw car dot
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(carX, carY, 8, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.stroke();
-      
-      // Draw directional arrow based on selected mode
-      const hasHeading = activePoint.heading !== undefined && activePoint.heading !== null && !isNaN(activePoint.heading);
-      
-      // Draw orientation arrow (yellow) if mode is 'orientation' or 'both' and heading data is available
-      if ((arrowMode === 'orientation' || arrowMode === 'both') && hasHeading) {
-        const arrowLength = 25;
-        const arrowHeadLength = 10;
-        
-        // Calculate arrow direction (heading is in radians)
-        // Convert AC heading to canvas coordinates - AC heading seems to be flipped
-        const angle = (activePoint.heading || 0) + Math.PI / 2;
-        
-        // Arrow line
-        const endX = carX + Math.cos(angle) * arrowLength;
-        const endY = carY + Math.sin(angle) * arrowLength;
-        
-        ctx.strokeStyle = "rgba(255, 255, 0, 1.0)";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(carX, carY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-        
-        // Arrow head
-        const headAngle1 = angle - Math.PI + 0.4;
-        const headAngle2 = angle - Math.PI - 0.4;
-        
-        const head1X = endX + Math.cos(headAngle1) * arrowHeadLength;
-        const head1Y = endY + Math.sin(headAngle1) * arrowHeadLength;
-        const head2X = endX + Math.cos(headAngle2) * arrowHeadLength;
-        const head2Y = endY + Math.sin(headAngle2) * arrowHeadLength;
-        
-        ctx.fillStyle = "rgba(255, 255, 0, 1.0)";
-        ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(endX, endY);
-        ctx.lineTo(head1X, head1Y);
-        ctx.lineTo(head2X, head2Y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Add car speed indicator as text
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(`${activePoint.speed.toFixed(0)} km/h`, carX, carY - 20);
-      }
-      
-      // Draw trajectory arrow (orange) if mode is 'trajectory' or 'both'
-      if (arrowMode === 'trajectory' || arrowMode === 'both') {
-        const pointIndex = lapData.telemetryPoints.indexOf(activePoint);
-        if (pointIndex > 0 && pointIndex < lapData.telemetryPoints.length - 1) {
-          const prevPoint = lapData.telemetryPoints[pointIndex - 1];
-          const nextPoint = lapData.telemetryPoints[pointIndex + 1];
-          
-          if (prevPoint && nextPoint) {
-            // Calculate movement direction
-            const deltaX = nextPoint.x - prevPoint.x;
-            const deltaZ = nextPoint.z - prevPoint.z;
-            const movementAngle = Math.atan2(deltaZ, deltaX);
-            
-            const arrowLength = 25;
-            const arrowHeadLength = 10;
-            
-            // Arrow line
-            const endX = carX + Math.cos(movementAngle) * arrowLength;
-            const endY = carY + Math.sin(movementAngle) * arrowLength;
-            
-            ctx.strokeStyle = "rgba(255, 150, 0, 1.0)"; // Orange for movement direction
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(carX, carY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-            
-            // Arrow head
-            const headAngle1 = movementAngle - Math.PI + 0.4;
-            const headAngle2 = movementAngle - Math.PI - 0.4;
-            
-            const head1X = endX + Math.cos(headAngle1) * arrowHeadLength;
-            const head1Y = endY + Math.sin(headAngle1) * arrowHeadLength;
-            const head2X = endX + Math.cos(headAngle2) * arrowHeadLength;
-            const head2Y = endY + Math.sin(headAngle2) * arrowHeadLength;
-            
-            ctx.fillStyle = "rgba(255, 150, 0, 1.0)";
-            ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(endX, endY);
-            ctx.lineTo(head1X, head1Y);
-            ctx.lineTo(head2X, head2Y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-          }
-        }
-      }
-      
-      // Add car speed indicator as text
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`${activePoint.speed.toFixed(0)} km/h`, carX, carY - 20);
-    }
-  }, [lapData, zoom, panX, panY, visualizationMode, hoveredPoint, arrowMode, isFrozen, frozenPoint]);
-
-  // Enhanced mouse move handling with freeze and drag support
-  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !lapData) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-  
-
-    // Calculate same coordinate transformation as in drawing
-    const xCoords = lapData.telemetryPoints.map(p => p.x);
-    const zCoords = lapData.telemetryPoints.map(p => p.z);
-    const minX = Math.min(...xCoords);
-    const maxX = Math.max(...xCoords);
-    const minZ = Math.min(...zCoords);
-    const maxZ = Math.max(...zCoords);
-    
-    const padding = 50;
-    const xRange = maxX - minX;
-    const zRange = maxZ - minZ;
-    const scaleX = (canvas.width - 2 * padding) / xRange;
-    const scaleZ = (canvas.height - 2 * padding) / zRange;
-    const scale = Math.min(scaleX, scaleZ);
-    
-    const baseOffsetX = padding + (canvas.width - 2 * padding - xRange * scale) / 2;
-    const baseOffsetY = padding + (canvas.height - 2 * padding - zRange * scale) / 2;
-    
-    const zoomedScale = scale * zoom;
-    const offsetX = baseOffsetX * zoom + panX;
-    const offsetY = baseOffsetY * zoom + panY;
-
-    // Find closest telemetry point to mouse position
-    let closestPoint: TelemetryPoint | null = null;
-    let closestDistance = Infinity;
-
-    lapData.telemetryPoints.forEach((point) => {
-      const x = (point.x - minX) * zoomedScale + offsetX;
-      const y = (point.z - minZ) * zoomedScale + offsetY;
-      const distance = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
-
-      if (distance < 30 && distance < closestDistance) {
-        closestDistance = distance;
-        closestPoint = point;
-      }
-    });
-
-    // Handle freeze mode vs normal hover
-    if (isFrozen) {
-      // In freeze mode, only update frozen point if actively dragging
-      if (isDraggingDot) {
-        setFrozenPoint(closestPoint);
-      }
-    } else {
-      // Normal hover behavior
-    setHoveredPoint(closestPoint);
-    }
-  };
-
-  // Enhanced drag handling
-  const handleMouseDrag = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    handleMouseMove(event);
-    
-    if (isDragging && !isDraggingDot) {
-      const deltaX = event.clientX - lastMousePos.x;
-      const deltaY = event.clientY - lastMousePos.y;
-      
-      setPanX(prev => prev + deltaX);
-      setPanY(prev => prev + deltaY);
-      
-      setLastMousePos({ x: event.clientX, y: event.clientY });
-    }
-  };
-
-  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isFrozen && frozenPoint) {
-      // Check if clicking on the frozen dot
-      const canvas = canvasRef.current;
-      if (!canvas || !lapData) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-
-      // Calculate dot position
-      const xCoords = lapData.telemetryPoints.map(p => p.x);
-      const zCoords = lapData.telemetryPoints.map(p => p.z);
-      const minX = Math.min(...xCoords);
-      const maxX = Math.max(...xCoords);
-      const minZ = Math.min(...zCoords);
-      const maxZ = Math.max(...zCoords);
-      
-      const padding = 50;
-      const xRange = maxX - minX;
-      const zRange = maxZ - minZ;
-      const scaleX = (canvas.width - 2 * padding) / xRange;
-      const scaleZ = (canvas.height - 2 * padding) / zRange;
-      const scale = Math.min(scaleX, scaleZ);
-      
-      const baseOffsetX = padding + (canvas.width - 2 * padding - xRange * scale) / 2;
-      const baseOffsetY = padding + (canvas.height - 2 * padding - zRange * scale) / 2;
-      
-      const zoomedScale = scale * zoom;
-      const offsetX = baseOffsetX * zoom + panX;
-      const offsetY = baseOffsetY * zoom + panY;
-
-      const dotX = (frozenPoint.x - minX) * zoomedScale + offsetX;
-      const dotY = (frozenPoint.z - minZ) * zoomedScale + offsetY;
-      const distance = Math.sqrt((mouseX - dotX) ** 2 + (mouseY - dotY) ** 2);
-
-      if (distance < 15) { // Within 15px of dot
-        setIsDraggingDot(true);
-        return;
-      }
-    }
-
-    // Normal pan behavior
-    setIsDragging(true);
-    setLastMousePos({ x: event.clientX, y: event.clientY });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setIsDraggingDot(false);
-  };
-
-  const handleMouseLeave = () => {
-    if (!isFrozen) {
-    setHoveredPoint(null);
-    }
-    setIsDragging(false);
-    setIsDraggingDot(false);
-  };
-
-  // Enhanced zoom handling
-  const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    event.preventDefault();
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-      
-    const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
-    const newZoom = Math.max(0.5, Math.min(zoom * zoomFactor, 10));
-    
-    // Calculate world coordinates and adjust pan to zoom towards mouse
-    if (lapData) {
-      const xCoords = lapData.telemetryPoints.map(p => p.x);
-      const zCoords = lapData.telemetryPoints.map(p => p.z);
-      const minX = Math.min(...xCoords);
-      const maxX = Math.max(...xCoords);
-      const minZ = Math.min(...zCoords);
-      const maxZ = Math.max(...zCoords);
-      
-      const padding = 50;
-      const xRange = maxX - minX;
-      const zRange = maxZ - minZ;
-      const scaleX = (canvas.width - 2 * padding) / xRange;
-      const scaleZ = (canvas.height - 2 * padding) / zRange;
-      const scale = Math.min(scaleX, scaleZ);
-      
-      const baseOffsetX = padding + (canvas.width - 2 * padding - xRange * scale) / 2;
-      const baseOffsetY = padding + (canvas.height - 2 * padding - zRange * scale) / 2;
-      
-      const currentOffsetX = baseOffsetX * zoom + panX;
-      const currentOffsetY = baseOffsetY * zoom + panY;
-      const currentScale = scale * zoom;
-      
-      const worldX = (mouseX - currentOffsetX) / currentScale;
-      const worldY = (mouseY - currentOffsetY) / currentScale;
-      
-      const newOffsetX = baseOffsetX * newZoom + panX;
-      const newOffsetY = baseOffsetY * newZoom + panY;
-      const newScale = scale * newZoom;
-      
-      const newMouseX = worldX * newScale + newOffsetX;
-      const newMouseY = worldY * newScale + newOffsetY;
-      
-      setPanX(prev => prev + (mouseX - newMouseX));
-      setPanY(prev => prev + (mouseY - newMouseY));
-    }
-    
-    setZoom(newZoom);
-  };
-
-  const resetView = () => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-  };
-
-  // Helper functions for data analysis
-  const getMaxTireTemp = (point: TelemetryPoint): number => {
-    return point.tyreTemperature ? Math.max(...point.tyreTemperature) : 0;
-  };
-
-  const getAverageTireTemp = (point: TelemetryPoint): number => {
-    return point.tyreTemperature && point.tyreTemperature.length > 0 
-      ? point.tyreTemperature.reduce((a, b) => a + b, 0) / point.tyreTemperature.length 
-      : 0;
-  };
-
-  const getTotalGForce = (point: TelemetryPoint): number => {
-    const x = point.gForceX || 0;
-    const y = point.gForceY || 0;
-    const z = point.gForceZ || 0;
-    return Math.sqrt(x * x + y * y + z * z);
-  };
 
   if (isLoading) {
     return (
@@ -774,132 +124,18 @@ export default function LapAnalysisPage() {
           {/* Main Visualization */}
           <div className="xl:col-span-2">
             <div className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-8">
-              {/* Visualization Mode Selector */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3">Visualization Mode</h3>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { mode: 'pedals' as VisualizationMode, label: 'Pedals', desc: 'Throttle/Brake', color: 'green' },
-                    { mode: 'tires' as VisualizationMode, label: 'Tires', desc: 'Temperature', color: 'orange' },
-                    { mode: 'gforce' as VisualizationMode, label: 'G-Force', desc: 'Acceleration', color: 'purple' },
-                    { mode: 'performance' as VisualizationMode, label: 'Performance', desc: 'Zones', color: 'blue' },
-                    { mode: 'grip' as VisualizationMode, label: 'Grip', desc: 'Surface', color: 'teal' }
-                  ].map(({ mode, label, desc, color }) => (
-                    <button
-                      key={mode}
-                      onClick={() => setVisualizationMode(mode)}
-                      className={`px-4 py-2 rounded-lg transition-all ${
-                        visualizationMode === mode
-                          ? (() => {
-                              switch(color) {
-                                case 'green': return 'bg-green-600 text-white border-green-500';
-                                case 'orange': return 'bg-orange-600 text-white border-orange-500';
-                                case 'purple': return 'bg-purple-600 text-white border-purple-500';
-                                case 'blue': return 'bg-blue-600 text-white border-blue-500';
-                                case 'teal': return 'bg-teal-600 text-white border-teal-500';
-                                default: return 'bg-blue-600 text-white';
-                              }
-                            })()
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-transparent'
-                      }`}
-                    >
-                      <div className="font-semibold">{label}</div>
-                      <div className="text-xs">{desc}</div>
-                    </button>
-                  ))}
-          </div>
-        </div>
-
-              {/* Arrow Mode Selector */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3">Car Direction Arrow</h3>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { mode: 'orientation' as const, label: 'Orientation', desc: 'Where car points', color: 'yellow' },
-                    { mode: 'trajectory' as const, label: 'Trajectory', desc: 'Where car moves', color: 'orange' },
-                    { mode: 'both' as const, label: 'Both', desc: 'Show both arrows', color: 'purple' }
-                  ].map(({ mode, label, desc, color }) => (
-                  <button
-                      key={mode}
-                      onClick={() => setArrowMode(mode)}
-                      className={`px-4 py-2 rounded-lg transition-all border-2 ${
-                        arrowMode === mode
-                          ? (() => {
-                              switch(color) {
-                                case 'yellow': return 'text-black';
-                                case 'orange': return 'text-white';
-                                case 'purple': return 'bg-purple-600 text-white border-purple-500';
-                                default: return 'bg-blue-600 text-white border-blue-500';
-                              }
-                            })()
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-transparent'
-                      }`}
-                      style={arrowMode === mode ? (() => {
-                        switch(color) {
-                          case 'yellow': return { backgroundColor: 'rgb(255, 255, 0)', borderColor: 'rgb(255, 255, 0)' };
-                          case 'orange': return { backgroundColor: 'rgb(255, 150, 0)', borderColor: 'rgb(255, 150, 0)' };
-                          default: return {};
-                        }
-                      })() : {}}
-                    >
-                      <div className="font-semibold">{label}</div>
-                      <div className="text-xs">{desc}</div>
-                      <div className="text-xs text-slate-400">
-                        {color === 'yellow' && 'Yellow arrow'}{color === 'orange' && 'Orange arrow'}{color === 'purple' && 'Both arrows'}
-                      </div>
-                  </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div className="mb-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Track Map</h3>
-                  <div className="flex gap-2">
-                  <button
-                      onClick={() => {
-                        setIsFrozen(!isFrozen);
-                        if (!isFrozen) {
-                          // Set frozen point to hovered point or start line if no hover
-                          setFrozenPoint(hoveredPoint || (lapData?.telemetryPoints[0] || null));
-                        }
-                      }}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        isFrozen 
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white' 
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                      }`}
-                    >
-                      {isFrozen ? 'Frozen' : 'Freeze Dot'}
-                  </button>
-                  <button
-                      onClick={resetView}
-                      className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors"
-                  >
-                      Reset View
-                  </button>
-                  </div>
-                </div>
-              </div>
-              
               <div className="relative">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-96 border border-slate-600 rounded-lg"
-                  onMouseMove={handleMouseDrag}
-                  onMouseDown={handleMouseDown}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseLeave}
-                  onWheel={handleWheel}
-                  style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-                />
-                
-                {/* Instructions */}
-                <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
-                  Scroll: Zoom • Drag: Pan • {isFrozen ? 'Click & Drag Dot' : 'Hover: Car Position'}
-                </div>
-                </div>
+                                 <TrackMapPro
+                   telemetryPoints={lapData.telemetryPoints}
+                   showControls={true}
+                   onActivePointChange={setHoveredPoint}
+                   onStateChange={({ isFrozen, arrowMode, visualizationMode }) => {
+                     setIsFrozen(isFrozen);
+                     setArrowMode(arrowMode);
+                     setVisualizationMode(visualizationMode);
+                   }}
+                 />
+              </div>
                 
               {/* Always Visible Collapsible Telemetry Data Panel */}
               <div className="mt-6 bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl overflow-hidden">
@@ -911,7 +147,7 @@ export default function LapAnalysisPage() {
                   <div className="flex items-center gap-3">
                     <h4 className="text-lg font-semibold text-blue-400">Telemetry Data</h4>
                     <div className="text-xs text-slate-400">
-                      {(hoveredPoint || frozenPoint) ? (
+                      {hoveredPoint ? (
                         <>
                           {isFrozen ? 'Frozen Position' : 'Live Position'} • 
                           {arrowMode === 'orientation' && ' Orientation'}
@@ -933,9 +169,9 @@ export default function LapAnalysisPage() {
                 {/* Collapsible content */}
                 {telemetryDropdownOpen && (
                   <div className="px-6 pb-6 border-t border-white/10">
-                    {(hoveredPoint || frozenPoint) ? (
+                    {hoveredPoint ? (
                       (() => {
-                        const activePoint = isFrozen ? frozenPoint : hoveredPoint;
+                        const activePoint = hoveredPoint;
                         if (!activePoint) return null;
 
                         return (

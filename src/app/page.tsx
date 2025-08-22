@@ -11,7 +11,7 @@ export default function RootPage() {
     if (status === "loading") return; // Wait for session to load
     
     if (session) {
-      redirect("/profile"); // Redirect logged-in users to profile
+      redirect("/featured"); // Redirect logged-in users to featured page
     } else {
       redirect("/landing"); // Redirect unauthenticated users to landing
     }

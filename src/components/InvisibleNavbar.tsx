@@ -10,7 +10,7 @@ export default function InvisibleNavbar() {
   const { data: session } = useSession();
 
   // Don't show navbar on dashboard pages when user is logged in
-  if (session && (pathname?.startsWith("/data") || pathname?.startsWith("/profile") || pathname?.startsWith("/settings"))) {
+  if (session && (pathname?.startsWith("/data") || pathname?.startsWith("/featured") || pathname?.startsWith("/settings"))) {
     return null;
   }
 
