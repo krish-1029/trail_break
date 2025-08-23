@@ -310,7 +310,10 @@ export default function LandingPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videosLoaded, setVideosLoaded] = useState(false);
   
-  const videos = useMemo(() => ["/gt_vid.mp4", "/f1_vid.mp4"], []);
+  const videos = useMemo(() => [
+    "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4", 
+    "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4"
+  ], []);
 
   // Preload videos to prevent glitches
   useEffect(() => {
