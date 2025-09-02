@@ -109,6 +109,7 @@ const ChromaGrid: React.FC<ChromaGridProps> = ({
     setX.current = gsap.quickSetter(el, "--x", "px") as SetterFn;
     setY.current = gsap.quickSetter(el, "--y", "px") as SetterFn;
     const { width, height } = el.getBoundingClientRect();
+    // Always keep the flashlight in the center
     pos.current = { x: width / 2, y: height / 2 };
     setX.current(pos.current.x);
     setY.current(pos.current.y);
@@ -128,18 +129,15 @@ const ChromaGrid: React.FC<ChromaGridProps> = ({
     });
   };
 
-  const handleMove = (e: React.PointerEvent) => {
-    const r = rootRef.current!.getBoundingClientRect();
-    moveTo(e.clientX - r.left, e.clientY - r.top);
-    gsap.to(fadeRef.current, { opacity: 0, duration: 0.25, overwrite: true });
+  // Static center position - no mouse tracking needed
+  const handleMove = () => {
+    // Keep flashlight in center, no mouse movement
+    return;
   };
 
   const handleLeave = () => {
-    gsap.to(fadeRef.current, {
-      opacity: 1,
-      duration: fadeOut,
-      overwrite: true,
-    });
+    // No fade out needed for static center position
+    return;
   };
 
   const handleCardClick = (url?: string) => {
@@ -156,9 +154,7 @@ const ChromaGrid: React.FC<ChromaGridProps> = ({
   return (
     <div
       ref={rootRef}
-      onPointerMove={handleMove}
-      onPointerLeave={handleLeave}
-      className={`relative w-full h-full flex flex-wrap justify-center items-start gap-3 ${className}`}
+      className={`relative w-full h-full ${className}`}
       style={
         {
           "--r": `${radius}px`,
@@ -167,7 +163,8 @@ const ChromaGrid: React.FC<ChromaGridProps> = ({
         } as React.CSSProperties
       }
     >
-      {data.map((c, i) => (
+      {/* Only render cards if items are provided and not empty */}
+      {items && items.length > 0 && data.map((c, i) => (
         <article
           key={i}
           onMouseMove={handleCardMove}
@@ -213,29 +210,31 @@ const ChromaGrid: React.FC<ChromaGridProps> = ({
           </footer>
         </article>
       ))}
+      
+      {/* Enhanced grayscale overlay with vibrant color center */}
       <div
         className="absolute inset-0 pointer-events-none z-30"
         style={{
-          backdropFilter: "grayscale(1) brightness(0.78)",
-          WebkitBackdropFilter: "grayscale(1) brightness(0.78)",
-          background: "rgba(0,0,0,0.001)",
+          background: 'rgba(0,0,0,0.001)',
+          backdropFilter: 'grayscale(1) brightness(0.5) contrast(0.8)',
+          WebkitBackdropFilter: 'grayscale(1) brightness(0.5) contrast(0.8)',
           maskImage:
-            "radial-gradient(circle var(--r) at var(--x) var(--y),transparent 0%,transparent 15%,rgba(0,0,0,0.10) 30%,rgba(0,0,0,0.22)45%,rgba(0,0,0,0.35)60%,rgba(0,0,0,0.50)75%,rgba(0,0,0,0.68)88%,white 100%)",
+            "radial-gradient(circle var(--r) at var(--x) var(--y), transparent 0%, transparent 25%, rgba(0,0,0,0.1) 35%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 65%, rgba(0,0,0,0.9) 80%, black 100%)",
           WebkitMaskImage:
-            "radial-gradient(circle var(--r) at var(--x) var(--y),transparent 0%,transparent 15%,rgba(0,0,0,0.10) 30%,rgba(0,0,0,0.22)45%,rgba(0,0,0,0.35)60%,rgba(0,0,0,0.50)75%,rgba(0,0,0,0.68)88%,white 100%)",
+            "radial-gradient(circle var(--r) at var(--x) var(--y), transparent 0%, transparent 25%, rgba(0,0,0,0.1) 35%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 65%, rgba(0,0,0,0.9) 80%, black 100%)",
         }}
       />
       <div
         ref={fadeRef}
         className="absolute inset-0 pointer-events-none transition-opacity duration-[250ms] z-40"
         style={{
-          backdropFilter: "grayscale(1) brightness(0.78)",
-          WebkitBackdropFilter: "grayscale(1) brightness(0.78)",
-          background: "rgba(0,0,0,0.001)",
+          background: 'rgba(0,0,0,0.001)',
+          backdropFilter: 'grayscale(1) brightness(0.5) contrast(0.8)',
+          WebkitBackdropFilter: 'grayscale(1) brightness(0.5) contrast(0.8)',
           maskImage:
-            "radial-gradient(circle var(--r) at var(--x) var(--y),white 0%,white 15%,rgba(255,255,255,0.90)30%,rgba(255,255,255,0.78)45%,rgba(255,255,255,0.65)60%,rgba(255,255,255,0.50)75%,rgba(255,255,255,0.32)88%,transparent 100%)",
+            "radial-gradient(circle var(--r) at var(--x) var(--y), black 0%, black 25%, rgba(0,0,0,0.9) 35%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.4) 65%, rgba(0,0,0,0.1) 80%, transparent 100%)",
           WebkitMaskImage:
-            "radial-gradient(circle var(--r) at var(--x) var(--y),white 0%,white 15%,rgba(255,255,255,0.90)30%,rgba(255,255,255,0.78)45%,rgba(255,255,255,0.65)60%,rgba(255,255,255,0.50)75%,rgba(255,255,255,0.32)88%,transparent 100%)",
+            "radial-gradient(circle var(--r) at var(--x) var(--y), black 0%, black 25%, rgba(0,0,0,0.9) 35%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.4) 65%, rgba(0,0,0,0.1) 80%, transparent 100%)",
           opacity: 1,
         }}
       />

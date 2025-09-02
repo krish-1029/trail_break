@@ -4,8 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/trpc/react";
 import ProfileIcon from "@/components/ProfileIcon";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function LeaderboardPage() {
+  const { currentTheme } = useTheme();
   const [selectedTrack, setSelectedTrack] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"cards" | "list">("list");
 
@@ -56,7 +58,9 @@ export default function LeaderboardPage() {
       <div className="absolute top-6 left-6 z-10">
         <Link
           href="/landing"
-          className="inline-flex items-center gap-2 px-4 py-2 text-white hover:text-red-400 transition-colors group"
+          className={`inline-flex items-center gap-2 px-4 py-2 text-white transition-colors group ${
+            currentTheme === 'gt' ? 'hover:text-red-400' : 'hover:text-blue-400'
+          }`}
         >
           <svg className="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -69,7 +73,7 @@ export default function LeaderboardPage() {
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-4">
-            Trail Break <span className="text-red-500">Leaderboard</span>
+            Trail Break <span className={currentTheme === 'gt' ? 'text-red-500' : 'text-blue-500'}>Leaderboard</span>
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto">
             Public laps featured by the community. Click any lap to view its full analysis.
@@ -87,7 +91,9 @@ export default function LeaderboardPage() {
                 id="track-filter"
                 value={selectedTrack}
                 onChange={(e) => setSelectedTrack(e.target.value)}
-                className="w-full px-4 py-3 pr-10 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none"
+                className={`w-full px-4 py-3 pr-10 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 appearance-none ${
+                  currentTheme === 'gt' ? 'focus:ring-red-500' : 'focus:ring-blue-500'
+                }`}
               >
                 <option value="all">All Tracks ({featuredLaps.length} laps)</option>
                 {uniqueTracks.map((track) => {
@@ -114,7 +120,7 @@ export default function LeaderboardPage() {
                 onClick={() => setViewMode("list")}
                 className={`px-4 py-3 rounded-lg font-medium transition-colors ${
                   viewMode === "list"
-                    ? "bg-red-600 text-white"
+                    ? currentTheme === 'gt' ? "bg-red-600 text-white" : "bg-blue-600 text-white"
                     : "bg-white/5 text-gray-300 hover:bg-white/10"
                 }`}
               >
@@ -124,7 +130,7 @@ export default function LeaderboardPage() {
                 onClick={() => setViewMode("cards")}
                 className={`px-4 py-3 rounded-lg font-medium transition-colors ${
                   viewMode === "cards"
-                    ? "bg-red-600 text-white"
+                    ? currentTheme === 'gt' ? "bg-red-600 text-white" : "bg-blue-600 text-white"
                     : "bg-white/5 text-gray-300 hover:bg-white/10"
                 }`}
               >
@@ -163,14 +169,16 @@ export default function LeaderboardPage() {
                   {filteredLaps.map((lap) => (
                     <tr key={lap.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 text-white font-mono font-bold">
-                        <Link href={`/data/${lap.id}?from=leaderboard`} className="hover:text-red-400 transition-colors">
+                        <Link href={`/data/${lap.id}?from=leaderboard`} className={`transition-colors ${
+                          currentTheme === 'gt' ? 'hover:text-red-400' : 'hover:text-blue-400'
+                        }`}>
                           {lap.lapTime}
                         </Link>
                       </td>
                       <td className="px-6 py-4 text-slate-300">{formatDate(lap.createdAt as unknown as Date)}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <ProfileIcon name={lap.userName} size="sm" />
+                          <ProfileIcon name={lap.userName} size="sm" theme={currentTheme} />
                           <span className="text-white font-medium">{lap.userDisplayName}</span>
                         </div>
                       </td>
@@ -181,7 +189,11 @@ export default function LeaderboardPage() {
                       <td className="px-6 py-4">
                                                   <Link
                             href={`/data/${lap.id}?from=leaderboard`}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                            className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                              currentTheme === 'gt' 
+                                ? 'bg-red-600 hover:bg-red-700' 
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
                           >
                           View
                         </Link>
@@ -204,7 +216,7 @@ export default function LeaderboardPage() {
                       <p className="text-slate-400 text-sm">{formatDate(lap.createdAt as unknown as Date)}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <ProfileIcon name={lap.userName} size="sm" />
+                      <ProfileIcon name={lap.userName} size="sm" theme={currentTheme} />
                       <span className="text-white font-medium">{lap.userDisplayName}</span>
                     </div>
                   </div>
@@ -233,7 +245,11 @@ export default function LeaderboardPage() {
                   </div>
 
                   <div className="mt-6 flex justify-end">
-                    <Link href={`/data/${lap.id}?from=leaderboard`} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                    <Link href={`/data/${lap.id}?from=leaderboard`} className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                      currentTheme === 'gt' 
+                        ? 'bg-red-600 hover:bg-red-700' 
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    }`}>
                       View
                     </Link>
                   </div>
@@ -250,7 +266,11 @@ export default function LeaderboardPage() {
           </p>
           <Link
             href="/auth/signin"
-            className="inline-flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            className={`inline-flex items-center px-6 py-3 text-white rounded-lg font-medium transition-colors ${
+              currentTheme === 'gt' 
+                ? 'bg-red-600 hover:bg-red-700' 
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             Join the Community
           </Link>

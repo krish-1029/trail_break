@@ -2,9 +2,11 @@
 
 import { useSession, signOut } from "next-auth/react";
 import ProfileIcon from "./ProfileIcon";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function AuthButton() {
   const { data: session } = useSession();
+  const { currentTheme } = useTheme();
 
   if (session) {
     return (
@@ -13,6 +15,7 @@ export default function AuthButton() {
           name={session.user?.name}
           email={session.user?.email}
           size="sm"
+          theme={currentTheme}
         />
         <button
           onClick={() => signOut()}

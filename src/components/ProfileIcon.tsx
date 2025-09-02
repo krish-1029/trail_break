@@ -1,11 +1,14 @@
 "use client";
 
+export type Theme = 'gt' | 'f1';
+
 interface ProfileIconProps {
   name?: string | null;
   email?: string | null;
   username?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
+  theme?: Theme;
 }
 
 export default function ProfileIcon({ 
@@ -13,7 +16,8 @@ export default function ProfileIcon({
   email, 
   username, 
   size = "md", 
-  className = "" 
+  className = "",
+  theme = "f1"
 }: ProfileIconProps) {
   // Get initials from name, username, or email (in that order of preference)
   const getInitials = (): string => {
@@ -48,12 +52,18 @@ export default function ProfileIcon({
   };
 
   const initials = getInitials();
+  
+  // Theme-based background colors
+  const themeColors = {
+    gt: "bg-red-600",
+    f1: "bg-blue-600"
+  };
 
   return (
     <div 
       className={`
         ${sizeClasses[size]} 
-        bg-red-600 
+        ${themeColors[theme]}
         rounded-full 
         flex 
         items-center 

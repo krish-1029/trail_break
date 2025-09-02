@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { useTheme } from "@/contexts/ThemeContext";
+import InteractiveTrackMapPreview from "@/components/InteractiveTrackMapPreview";
+import TelemetryDisplay from "@/components/TelemetryDisplay";
+import type { TelemetryPoint } from "@/types/telemetry";
 
 // Track Map Preview Component
 function TrackMapPreview() {
@@ -305,40 +309,56 @@ function TelemetryDataPreview() {
 
 export default function LandingPage() {
   const { data: session } = useSession();
+  const { currentTheme, setCurrentTheme } = useTheme();
   const [showArrow, setShowArrow] = useState(true);
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videosLoaded, setVideosLoaded] = useState(false);
+  const [videoEnded, setVideoEnded] = useState(false);
+  const [videoVisible, setVideoVisible] = useState(false);
+  const [styleSelectorExpanded, setStyleSelectorExpanded] = useState(true);
+  const [hoveredTelemetryPoint, setHoveredTelemetryPoint] = useState<TelemetryPoint | null>(null);
   
-  const videos = useMemo(() => [
-    "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4", 
-    "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4"
-  ], []);
+  // Video sources for different themes
+  const videoSources = {
+    gt: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4",
+    f1: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4"
+  };
+  
+  const videoSrc = videoSources[currentTheme];
 
-  // Preload videos to prevent glitches
+  // Handle theme switching with animation restart
+  const switchTheme = (newTheme: 'gt' | 'f1') => {
+    if (newTheme === currentTheme) return;
+    
+    // Reset all animation states
+    setVideoVisible(false);
+    setVideoEnded(false);
+    setVideosLoaded(false);
+    
+    // Switch theme
+    setCurrentTheme(newTheme);
+  };
+
+  // Preload video
   useEffect(() => {
-    const preloadVideos = async () => {
-      const loadPromises = videos.map(src => {
-        return new Promise((resolve, reject) => {
-          const video = document.createElement('video');
-          video.src = src;
-          video.preload = 'metadata';
-          video.onloadedmetadata = () => resolve(src);
-          video.onerror = () => reject(new Error(`Failed to load ${src}`));
-        });
-      });
-
+    const preloadVideo = async () => {
       try {
-        await Promise.all(loadPromises);
-        setVideosLoaded(true);
+        const video = document.createElement('video');
+        video.src = videoSrc;
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => setVideosLoaded(true);
+        video.onerror = () => {
+          console.error('Failed to load video:', videoSrc);
+          setVideosLoaded(true); // Continue anyway
+        };
       } catch (error) {
-        console.error('Failed to preload videos:', error);
-        setVideosLoaded(true); // Continue anyway
+        console.error('Failed to preload video:', error);
+        setVideosLoaded(true);
       }
     };
 
-    preloadVideos();
-  }, [videos]);
+    preloadVideo();
+  }, [videoSrc]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -356,8 +376,8 @@ export default function LandingPage() {
     if (!video) return;
 
     const handleVideoEnd = () => {
-      // Switch to the next video
-      setCurrentVideoIndex((prevIndex) => (prevIndex + 1) % videos.length);
+      // Pause on last frame and show ChromaGrid
+      setVideoEnded(true);
     };
 
     const handleVideoError = () => {
@@ -377,53 +397,153 @@ export default function LandingPage() {
       video.removeEventListener('ended', handleVideoEnd);
       video.removeEventListener('error', handleVideoError);
     };
-  }, [videos.length]);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videosLoaded) return;
 
-    // Only change video if src is different
-    const newSrc = videos[currentVideoIndex]!;
-    if (video.src.endsWith(newSrc)) return;
-
-    // Load and play the new video
-    video.src = newSrc;
-    video.load();
-    
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(error => {
-        console.error('Video play failed:', error);
-        // Retry after a short delay
-        setTimeout(() => {
-          video.play().catch(console.error);
-        }, 500);
-      });
+    // Load and play the GT video
+    if (!video.src.endsWith(videoSrc)) {
+      video.src = videoSrc;
+      video.load();
+      
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          // Trigger fade-in animation after video starts playing
+          setTimeout(() => {
+            setVideoVisible(true);
+          }, 100);
+        }).catch(error => {
+          console.error('Video play failed:', error);
+          // Retry after a short delay
+          setTimeout(() => {
+            video.play().then(() => {
+              setTimeout(() => {
+                setVideoVisible(true);
+              }, 100);
+            }).catch(console.error);
+          }, 500);
+        });
+      }
     }
-  }, [currentVideoIndex, videos, videosLoaded]);
+  }, [videoSrc, videosLoaded]);
   return (
     <main className="min-h-screen text-white">
+      {/* Theme Switcher - Top Left */}
+      <div className={`fixed top-6 z-50 bg-black/20 backdrop-blur-md rounded-2xl border border-white/10 transition-all duration-300 ease-in-out ${
+        styleSelectorExpanded ? 'left-6' : '-left-32'
+      }`}>
+        {styleSelectorExpanded ? (
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-white/70 font-medium">Choose your style</div>
+              <button
+                onClick={() => setStyleSelectorExpanded(false)}
+                className="text-white/50 hover:text-white/80 transition-colors duration-200 ml-3"
+                title="Minimize"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => switchTheme('gt')}
+                className={`group relative flex items-center justify-center w-12 h-12 rounded-xl border-2 transition-all duration-300 ${
+                  currentTheme === 'gt' 
+                    ? 'border-red-500 bg-red-500/20 shadow-lg shadow-red-500/20' 
+                    : 'border-red-500/40 bg-red-500/10 hover:border-red-500/60 hover:bg-red-500/15'
+                }`}
+                title="GT Racing Style"
+              >
+                <span className="text-red-500 font-bold text-lg">GT</span>
+              </button>
+              <button
+                onClick={() => switchTheme('f1')}
+                className={`group relative flex items-center justify-center w-12 h-12 rounded-xl border-2 transition-all duration-300 ${
+                  currentTheme === 'f1' 
+                    ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/20' 
+                    : 'border-blue-500/40 bg-blue-500/10 hover:border-blue-500/60 hover:bg-blue-500/15'
+                }`}
+                title="Formula 1 Style"
+              >
+                <span className="text-blue-500 font-bold text-lg">F1</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setStyleSelectorExpanded(true)}
+            className="p-3 text-white/50 hover:text-white/80 transition-colors duration-200"
+            title="Expand style selector"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Expand Button - Only visible when minimized */}
+      {!styleSelectorExpanded && (
+        <button
+          onClick={() => setStyleSelectorExpanded(true)}
+          className={`fixed top-6 left-6 z-50 bg-black/20 backdrop-blur-md rounded-2xl p-3 border transition-all duration-300 hover:bg-black/30 ${
+            currentTheme === 'gt' 
+              ? 'border-red-500/40 text-red-500 hover:border-red-500/60 hover:text-red-400 shadow-lg shadow-red-500/10'
+              : 'border-blue-500/40 text-blue-500 hover:border-blue-500/60 hover:text-blue-400 shadow-lg shadow-blue-500/10'
+          }`}
+          title={`Open style selector (${currentTheme.toUpperCase()} selected)`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
+
       <div className="max-w-[1800px] mx-auto px-6 py-0">
         {/* Hero Section */}
                  <section className="relative overflow-hidden min-h-screen flex flex-col items-center justify-between text-center pt-16 md:pt-20 lg:pt-24 pb-0 isolate">
-          <div className="fixed inset-0 z-0 pointer-events-none h-screen w-screen">
+          <div className="fixed inset-0 z-0 pointer-events-none h-screen w-screen bg-gray-900">
             <video 
               ref={videoRef}
-              className="w-full h-full object-cover" 
+              className="w-full h-full object-cover transition-all duration-2000 ease-out" 
               autoPlay 
               muted 
               playsInline 
               preload="auto" 
               aria-hidden="true"
+              style={{
+                opacity: videoVisible ? 1 : 0,
+                filter: videoVisible ? 'blur(0px)' : 'blur(20px)',
+                transform: videoVisible ? 'scale(1)' : 'scale(1.1)'
+              }}
             />
+            {/* Custom grayscale overlay with colored center circle */}
+            {videoEnded && (
+              <div className="absolute inset-0 z-10 pointer-events-none">
+                <div 
+                  className="w-full h-full"
+                  style={{
+                    background: 'rgba(0,0,0,0.001)',
+                    backdropFilter: 'grayscale(1) brightness(0.6)',
+                    WebkitBackdropFilter: 'grayscale(1) brightness(0.6)',
+                    maskImage: 'radial-gradient(circle 300px at 50% 60%, transparent 0%, transparent 30%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0.9) 80%, black 100%)',
+                    WebkitMaskImage: 'radial-gradient(circle 300px at 50% 60%, transparent 0%, transparent 30%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0.9) 80%, black 100%)'
+                  }}
+                />
+              </div>
+            )}
           </div>
           
           {/* Main content - positioned at top */}
           <div className="relative z-10 flex-shrink-0">
             <h1 className="text-8xl md:text-9xl font-bold tracking-tight mb-4 cursor-pointer group" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.5)' }}>
-             <span className={`inline-block transition-colors duration-500 ease-in-out text-white ${currentVideoIndex === 0 ? 'group-hover:text-red-500' : 'group-hover:text-blue-500'}`}>Trail</span>{" "}
-             <span className={`inline-block transition-colors duration-500 ease-in-out ${currentVideoIndex === 0 ? 'text-red-500 group-hover:text-white' : 'text-blue-500 group-hover:text-white'}`}>Break</span>
+             <span className={`inline-block transition-colors duration-500 ease-in-out text-white ${currentTheme === 'gt' ? 'group-hover:text-red-500' : 'group-hover:text-blue-500'}`}>Trail</span>{" "}
+             <span className={`inline-block transition-colors duration-500 ease-in-out ${currentTheme === 'gt' ? 'text-red-500 group-hover:text-white' : 'text-blue-500 group-hover:text-white'}`}>Break</span>
            </h1>
            
            {/* Modern divider line */}
@@ -443,11 +563,23 @@ export default function LandingPage() {
            <div className="flex flex-col sm:flex-row gap-4 justify-center">
              <Link
                href={session ? "/data" : "/auth/signin"}
-               className="group relative flex items-center justify-center w-40 py-3 text-lg font-medium text-white bg-black/30 border border-red-500/40 rounded-lg backdrop-blur-md hover:bg-black/40 hover:border-red-500/60 hover:shadow-lg hover:shadow-red-500/20 transition-all duration-300 overflow-hidden"
+               className={`group relative flex items-center justify-center w-40 py-3 text-lg font-medium text-white bg-black/30 border rounded-lg backdrop-blur-md hover:bg-black/40 hover:shadow-lg transition-all duration-300 overflow-hidden ${
+                 currentTheme === 'gt' 
+                   ? 'border-red-500/40 hover:border-red-500/60 hover:shadow-red-500/20'
+                   : 'border-blue-500/40 hover:border-blue-500/60 hover:shadow-blue-500/20'
+               }`}
              >
                <span className="relative z-10">Dashboard</span>
-               <div className="absolute inset-0 bg-gradient-to-r from-red-500/25 to-red-400/15 opacity-100 transition-opacity duration-300"></div>
-               <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 to-red-400/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+               <div className={`absolute inset-0 bg-gradient-to-r opacity-100 transition-opacity duration-300 ${
+                 currentTheme === 'gt' 
+                   ? 'from-red-500/25 to-red-400/15'
+                   : 'from-blue-500/25 to-blue-400/15'
+               }`}></div>
+               <div className={`absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
+                 currentTheme === 'gt' 
+                   ? 'from-red-500/30 to-red-400/25'
+                   : 'from-blue-500/30 to-blue-400/25'
+               }`}></div>
              </Link>
              <Link
                href="/leaderboard"
@@ -524,10 +656,11 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="lg:w-1/2">
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
-                  <div className="h-64 bg-gradient-to-br from-green-500/20 to-green-400/10 rounded-xl relative overflow-hidden">
-                    <TrackMapPreview />
-                  </div>
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                  <InteractiveTrackMapPreview 
+                    onHover={setHoveredTelemetryPoint}
+                    className="h-full"
+                  />
                 </div>
               </div>
             </div>
@@ -563,13 +696,14 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-                             <div className="lg:w-1/2">
-                 <div className="bg-black/40 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
-                   <div className="h-64 bg-gradient-to-br from-blue-500/20 to-blue-400/10 rounded-xl relative overflow-hidden">
-                     <TelemetryDataPreview />
-                   </div>
-                 </div>
-               </div>
+              <div className="lg:w-1/2">
+                <div className="bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm">
+                  <TelemetryDisplay 
+                    hoveredPoint={hoveredTelemetryPoint}
+                    className="h-64"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

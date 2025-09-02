@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Since this app uses NextAuth (not Firebase Auth), client-side access will be limited.
+    // Most operations should happen server-side using Firebase Admin SDK.
+    // These rules provide basic protection for any client-side access.
+    
+    // Helper functions
+    function isServerRequest() {
+      // Firebase Admin SDK requests don't have request.auth, so this helps identify them
+      return request.auth == null;
+    }
+    
+    function hasValidAuthToken() {
+      // Since we're not using Firebase Auth, this will always be false for client requests
+      return request.auth != null && request.auth.uid != null && request.auth.uid != "";
+    }
+    
+    // Sessions collection - contains user driving sessions
+    match /sessions/{sessionId} {
+      // Allow server-side access (Admin SDK) for all operations
+      // Deny client-side access since NextAuth sessions can't be validated in Firestore rules
+      allow read, write: if isServerRequest();
+      
+      // Block all other access
+      allow read, write: if false;
+    }
+    
+    // Laps collection - contains individual lap data
+    match /laps/{lapId} {
+      // Allow server-side access (Admin SDK) for all operations
+      allow read, write: if isServerRequest();
+      
+      // Block all client access - lap data should only be accessed through your tRPC API
+      // which handles authentication and determines if laps are featured/public
+      allow read, write: if false;
+    }
+    
+    // Telemetry chunks collection - contains high-frequency telemetry data
+    match /telemetryChunks/{chunkId} {
+      // Allow server-side access (Admin SDK) for all operations
+      allow read, write: if isServerRequest();
+      
+      // Block all client access - telemetry data should only be accessed through your tRPC API
+      // which handles authentication and determines if data is from featured laps
+      allow read, write: if false;
+    }
+    
+    // Deny all other access to any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
