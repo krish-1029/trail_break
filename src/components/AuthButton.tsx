@@ -19,7 +19,9 @@ export default function AuthButton() {
         />
         <button
           onClick={() => signOut()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-white hover:text-red-400 transition-colors group"
+          className={`inline-flex items-center gap-2 px-4 py-2 text-white transition-colors group ${
+            currentTheme === 'gt' ? 'hover:text-red-400' : 'hover:text-blue-400'
+          }`}
         >
           <span className="font-medium">Sign Out</span>
         </button>
@@ -30,7 +32,9 @@ export default function AuthButton() {
   return (
     <a 
       href="/auth/signin"
-      className="inline-flex items-center gap-2 px-4 py-2 text-white hover:text-red-400 transition-colors group"
+      className={`inline-flex items-center gap-2 px-4 py-2 text-white transition-colors group ${
+        currentTheme === 'gt' ? 'hover:text-red-400' : 'hover:text-blue-400'
+      }`}
     >
       <span className="font-medium">Sign In</span>
     </a>

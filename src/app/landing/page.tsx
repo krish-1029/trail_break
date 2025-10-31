@@ -7,6 +7,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import InteractiveTrackMapPreview from "@/components/InteractiveTrackMapPreview";
 import TelemetryDisplay from "@/components/TelemetryDisplay";
 import type { TelemetryPoint } from "@/types/telemetry";
+import { api } from "@/trpc/react";
 
 // Track Map Preview Component
 function TrackMapPreview() {
@@ -116,21 +117,82 @@ function TrackMapPreview() {
   );
 }
 
-// Performance Chart Preview Component
-function PerformanceChartPreview() {
-  const [time, setTime] = useState(0);
+// Performance Analysis Component with Live Animation
+function PerformanceAnalysis({ 
+  onActivePointChange, 
+  onStop 
+}: { 
+  onActivePointChange: (point: TelemetryPoint | null) => void;
+  onStop: () => void;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Fetch the shortest lap from leaderboard
+  const { data: featuredLaps } = api.leaderboard.getFeaturedLaps.useQuery();
+  const shortestLap = featuredLaps?.[0];
+  
+  // Fetch full telemetry data for the shortest lap
+  const { data: lapData } = api.leaderboard.getLapPublic.useQuery(
+    { lapId: shortestLap?.id || "" },
+    { enabled: !!shortestLap?.id }
+  );
 
+  const telemetryData = lapData?.telemetryPoints || [];
+
+  // Handle play button click
+  const handlePlay = () => {
+    if (!telemetryData.length) return;
+    setIsPlaying(true);
+    setCurrentIndex(0);
+    
+    // Start animation
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => {
+        const next = prev + 1;
+        if (next >= telemetryData.length) {
+          setIsPlaying(false);
+          return 0;
+        }
+        return next;
+      });
+    }, 50); // 50ms per point for smooth animation
+  };
+
+  // Handle stop button click
+  const handleStop = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsPlaying(false);
+    setCurrentIndex(0);
+    onActivePointChange(null);
+    onStop();
+  };
+
+  // Update active point when index changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(prev => prev + 0.1);
-    }, 100);
-    return () => clearInterval(interval);
+    if (isPlaying && telemetryData[currentIndex]) {
+      onActivePointChange(telemetryData[currentIndex] || null);
+    }
+  }, [currentIndex, isPlaying, telemetryData, onActivePointChange]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, []);
 
+  // Draw graphs
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !isPlaying || !telemetryData.length) return;
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -157,62 +219,88 @@ function PerformanceChartPreview() {
       ctx.stroke();
     }
     
-    // Draw speed line
-    ctx.strokeStyle = '#60A5FA';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let x = 0; x < width - padding * 2; x += 2) {
-      const t = (time + x * 0.02) % (Math.PI * 4);
-      const speed = Math.sin(t) * 0.3 + 0.5;
-      const y = height - padding - speed * (height - padding * 2);
-      if (x === 0) ctx.moveTo(padding + x, y);
-      else ctx.lineTo(padding + x, y);
-    }
-    ctx.stroke();
+    // Get data window (last 100 points or all if less)
+    const windowSize = Math.min(100, currentIndex + 1);
+    const startIndex = Math.max(0, currentIndex - windowSize + 1);
+    const windowData = telemetryData.slice(startIndex, currentIndex + 1);
     
     // Draw throttle line
     ctx.strokeStyle = '#34D399';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let x = 0; x < width - padding * 2; x += 2) {
-      const t = (time + x * 0.02) % (Math.PI * 4);
-      const throttle = Math.max(0, Math.sin(t + 0.2)) * 0.8;
-      const y = height - padding - throttle * (height - padding * 2);
-      if (x === 0) ctx.moveTo(padding + x, y);
-      else ctx.lineTo(padding + x, y);
-    }
+    windowData.forEach((point, idx) => {
+      const x = padding + (idx / (windowSize - 1)) * (width - padding * 2);
+      const y = height - padding - point.throttle * (height - padding * 2);
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
     ctx.stroke();
     
     // Draw brake line
     ctx.strokeStyle = '#F87171';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let x = 0; x < width - padding * 2; x += 2) {
-      const t = (time + x * 0.02) % (Math.PI * 4);
-      const brake = Math.sin(t * 2) < -0.7 ? Math.random() * 0.6 + 0.2 : 0;
-      const y = height - padding - brake * (height - padding * 2);
-      if (x === 0) ctx.moveTo(padding + x, y);
-      else ctx.lineTo(padding + x, y);
-    }
+    windowData.forEach((point, idx) => {
+      const x = padding + (idx / (windowSize - 1)) * (width - padding * 2);
+      const y = height - padding - point.brake * (height - padding * 2);
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
     ctx.stroke();
     
     // Draw labels
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '12px monospace';
-    ctx.fillText('Speed', padding + 5, padding + 15);
     ctx.fillStyle = '#34D399';
-    ctx.fillText('Throttle', padding + 5, padding + 30);
+    ctx.font = '12px monospace';
+    ctx.fillText('Throttle', padding + 5, padding + 15);
     ctx.fillStyle = '#F87171';
-    ctx.fillText('Brake', padding + 5, padding + 45);
+    ctx.fillText('Brake', padding + 5, padding + 30);
     
-  }, [time]);
+  }, [isPlaying, currentIndex, telemetryData]);
 
+  // Show placeholder when not playing
+  if (!isPlaying) {
+    return (
+      <div className="relative h-64 flex items-center justify-center">
+        {/* Play button in extreme top right */}
+        <button
+          onClick={handlePlay}
+          disabled={!telemetryData.length}
+          className="absolute -top-7 -right-7 p-2 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed z-10"
+          title="Play animation"
+        >
+          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
+        
+        {/* Centered instructions */}
+        <div className="text-center text-white/70">
+          <div className="text-lg font-medium mb-2">Click play to view live performance data</div>
+          <div className="text-sm">Watch throttle and brake inputs in real-time</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show graphs when playing
   return (
-    <canvas 
-      ref={canvasRef}
-      className="w-full h-full rounded-xl"
-      style={{ background: 'transparent' }}
-    />
+    <div className="relative h-64">
+      <canvas 
+        ref={canvasRef}
+        className="w-full h-full rounded-xl"
+        style={{ background: 'transparent' }}
+      />
+      {/* Stop button always visible in extreme top right */}
+      <button
+        onClick={handleStop}
+        className="absolute -top-7 -right-7 p-2 text-red-400 hover:text-red-300 transition-colors z-10"
+        title="Stop animation"
+      >
+        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <path d="M6 6h12v12H6z"/>
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -309,35 +397,33 @@ function TelemetryDataPreview() {
 
 export default function LandingPage() {
   const { data: session } = useSession();
-  const { currentTheme, setCurrentTheme } = useTheme();
+  const { currentTheme } = useTheme();
   const [showArrow, setShowArrow] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [videoEnded, setVideoEnded] = useState(false);
   const [videoVisible, setVideoVisible] = useState(false);
-  const [styleSelectorExpanded, setStyleSelectorExpanded] = useState(true);
   const [hoveredTelemetryPoint, setHoveredTelemetryPoint] = useState<TelemetryPoint | null>(null);
+  const [activePerformancePoint, setActivePerformancePoint] = useState<TelemetryPoint | null>(null);
   
   // Video sources for different themes
   const videoSources = {
+    // Blob storage versions (for production)
     gt: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4",
-    f1: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4"
+    f1: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4",
+    // Local 4k versions (for development - uncomment for local testing)
+    // gt: "/gt_4k.mp4",
+    // f1: "/f1_4k.mp4"
   };
   
   const videoSrc = videoSources[currentTheme];
 
-  // Handle theme switching with animation restart
-  const switchTheme = (newTheme: 'gt' | 'f1') => {
-    if (newTheme === currentTheme) return;
-    
-    // Reset all animation states
+  // Reset video states when theme changes
+  useEffect(() => {
     setVideoVisible(false);
     setVideoEnded(false);
     setVideosLoaded(false);
-    
-    // Switch theme
-    setCurrentTheme(newTheme);
-  };
+  }, [currentTheme]);
 
   // Preload video
   useEffect(() => {
@@ -431,79 +517,6 @@ export default function LandingPage() {
   }, [videoSrc, videosLoaded]);
   return (
     <main className="min-h-screen text-white">
-      {/* Theme Switcher - Top Left */}
-      <div className={`fixed top-6 z-50 bg-black/20 backdrop-blur-md rounded-2xl border border-white/10 transition-all duration-300 ease-in-out ${
-        styleSelectorExpanded ? 'left-6' : '-left-32'
-      }`}>
-        {styleSelectorExpanded ? (
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-white/70 font-medium">Choose your style</div>
-              <button
-                onClick={() => setStyleSelectorExpanded(false)}
-                className="text-white/50 hover:text-white/80 transition-colors duration-200 ml-3"
-                title="Minimize"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => switchTheme('gt')}
-                className={`group relative flex items-center justify-center w-12 h-12 rounded-xl border-2 transition-all duration-300 ${
-                  currentTheme === 'gt' 
-                    ? 'border-red-500 bg-red-500/20 shadow-lg shadow-red-500/20' 
-                    : 'border-red-500/40 bg-red-500/10 hover:border-red-500/60 hover:bg-red-500/15'
-                }`}
-                title="GT Racing Style"
-              >
-                <span className="text-red-500 font-bold text-lg">GT</span>
-              </button>
-              <button
-                onClick={() => switchTheme('f1')}
-                className={`group relative flex items-center justify-center w-12 h-12 rounded-xl border-2 transition-all duration-300 ${
-                  currentTheme === 'f1' 
-                    ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/20' 
-                    : 'border-blue-500/40 bg-blue-500/10 hover:border-blue-500/60 hover:bg-blue-500/15'
-                }`}
-                title="Formula 1 Style"
-              >
-                <span className="text-blue-500 font-bold text-lg">F1</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setStyleSelectorExpanded(true)}
-            className="p-3 text-white/50 hover:text-white/80 transition-colors duration-200"
-            title="Expand style selector"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Expand Button - Only visible when minimized */}
-      {!styleSelectorExpanded && (
-        <button
-          onClick={() => setStyleSelectorExpanded(true)}
-          className={`fixed top-6 left-6 z-50 bg-black/20 backdrop-blur-md rounded-2xl p-3 border transition-all duration-300 hover:bg-black/30 ${
-            currentTheme === 'gt' 
-              ? 'border-red-500/40 text-red-500 hover:border-red-500/60 hover:text-red-400 shadow-lg shadow-red-500/10'
-              : 'border-blue-500/40 text-blue-500 hover:border-blue-500/60 hover:text-blue-400 shadow-lg shadow-blue-500/10'
-          }`}
-          title={`Open style selector (${currentTheme.toUpperCase()} selected)`}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      )}
-
       <div className="max-w-[1800px] mx-auto px-6 py-0">
         {/* Hero Section */}
                  <section className="relative overflow-hidden min-h-screen flex flex-col items-center justify-between text-center pt-16 md:pt-20 lg:pt-24 pb-0 isolate">
@@ -659,6 +672,7 @@ export default function LandingPage() {
                 <div className="bg-black/40 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                   <InteractiveTrackMapPreview 
                     onHover={setHoveredTelemetryPoint}
+                    activePoint={activePerformancePoint}
                     className="h-full"
                   />
                 </div>
@@ -697,9 +711,9 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="lg:w-1/2">
-                <div className="bg-black/40 border border-white/10 rounded-2xl backdrop-blur-sm">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
                   <TelemetryDisplay 
-                    hoveredPoint={hoveredTelemetryPoint}
+                    hoveredPoint={activePerformancePoint || hoveredTelemetryPoint}
                     className="h-64"
                   />
                 </div>
@@ -737,13 +751,14 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-                             <div className="lg:w-1/2">
-                 <div className="bg-black/40 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
-                   <div className="h-64 bg-gradient-to-br from-purple-500/20 to-purple-400/10 rounded-xl relative overflow-hidden">
-                     <PerformanceChartPreview />
-                   </div>
-                 </div>
-               </div>
+              <div className="lg:w-1/2">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                  <PerformanceAnalysis
+                    onActivePointChange={setActivePerformancePoint}
+                    onStop={() => setActivePerformancePoint(null)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

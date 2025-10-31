@@ -6,24 +6,26 @@ import type { TelemetryPoint } from "@/types/telemetry";
 
 interface InteractiveTrackMapPreviewProps {
   onHover?: (point: TelemetryPoint | null) => void;
+  activePoint?: TelemetryPoint | null; // For programmatic control of dot position
   className?: string;
 }
 
-export default function InteractiveTrackMapPreview({ onHover, className = "" }: InteractiveTrackMapPreviewProps) {
+export default function InteractiveTrackMapPreview({ onHover, activePoint, className = "" }: InteractiveTrackMapPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<TelemetryPoint | null>(null);
   
   // Fetch the shortest lap from leaderboard
-  const { data: featuredLaps, isLoading } = api.leaderboard.getFeaturedLaps.useQuery();
+  const { data: featuredLaps, isLoading: isLoadingFeatured } = api.leaderboard.getFeaturedLaps.useQuery();
   const shortestLap = featuredLaps?.[0]; // First lap is the shortest (sorted by lap time)
   
   // Fetch full telemetry data for the shortest lap
-  const { data: lapData } = api.leaderboard.getLapPublic.useQuery(
+  const { data: lapData, isLoading: isLoadingLapData } = api.leaderboard.getLapPublic.useQuery(
     { lapId: shortestLap?.id || "" },
     { enabled: !!shortestLap?.id }
   );
 
   const telemetryData = lapData?.telemetryPoints || [];
+  const isLoading = isLoadingFeatured || isLoadingLapData;
 
   // Draw the track map and racing line
   useEffect(() => {
@@ -98,10 +100,12 @@ export default function InteractiveTrackMapPreview({ onHover, className = "" }: 
       }
     }
 
-    // Highlight hovered point
-    if (hoveredPoint) {
-      const x = (hoveredPoint.x - minX) * scale + offsetX;
-      const y = (hoveredPoint.z - minZ) * scale + offsetY;
+    // Highlight active point (programmatic control) or hovered point
+    // Only use activePoint if it's explicitly set (not null or undefined)
+    const pointToHighlight = (activePoint !== undefined && activePoint !== null) ? activePoint : hoveredPoint;
+    if (pointToHighlight) {
+      const x = (pointToHighlight.x - minX) * scale + offsetX;
+      const y = (pointToHighlight.z - minZ) * scale + offsetY;
       
       ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
@@ -111,7 +115,7 @@ export default function InteractiveTrackMapPreview({ onHover, className = "" }: 
       ctx.fill();
       ctx.stroke();
     }
-  }, [telemetryData, hoveredPoint]);
+  }, [telemetryData, hoveredPoint, activePoint]);
 
   // Handle mouse move over canvas
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -170,7 +174,8 @@ export default function InteractiveTrackMapPreview({ onHover, className = "" }: 
     }
   };
 
-  if (isLoading) {
+  // Show loading state if either query is loading, or if we have a shortestLap but are waiting for lapData
+  if (isLoading || (shortestLap && !lapData && shortestLap.id)) {
     return (
       <div className={`flex items-center justify-center h-64 ${className}`}>
         <div className="text-white/70">Loading track data...</div>
