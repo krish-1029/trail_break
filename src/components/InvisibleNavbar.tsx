@@ -12,6 +12,7 @@ export default function InvisibleNavbar() {
   const { data: session } = useSession();
   const { currentTheme, setCurrentTheme } = useTheme();
   const [styleSelectorExpanded, setStyleSelectorExpanded] = useState(false);
+  const [navVisible, setNavVisible] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Compute visibility (we'll return after all hooks are declared)
@@ -23,6 +24,14 @@ export default function InvisibleNavbar() {
     setCurrentTheme(newTheme);
     setStyleSelectorExpanded(false);
   };
+
+  // Trigger nav fade-in animation on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setNavVisible(true);
+    }, 500); // Slight delay for navbar to appear after other content
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,7 +60,12 @@ export default function InvisibleNavbar() {
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="flex items-center justify-between">
           {/* Left side - Theme selector and conditionally show home button */}
-          <div className="flex items-center gap-4 pr-6">
+          <div 
+            className="flex items-center gap-4 pr-6 transition-opacity duration-1000 ease-out"
+            style={{
+              opacity: navVisible ? 1 : 0
+            }}
+          >
             {/* Theme Selector - Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button
@@ -129,7 +143,12 @@ export default function InvisibleNavbar() {
           </div>
 
           {/* Right side - conditionally show auth button */}
-          <div>
+          <div 
+            className="transition-opacity duration-1000 ease-out"
+            style={{
+              opacity: navVisible ? 1 : 0
+            }}
+          >
             {pathname === "/landing" && (
               <AuthButton />
             )}

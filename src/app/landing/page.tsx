@@ -403,27 +403,49 @@ export default function LandingPage() {
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [videoEnded, setVideoEnded] = useState(false);
   const [videoVisible, setVideoVisible] = useState(false);
+  const [contentVisible, setContentVisible] = useState(false);
   const [hoveredTelemetryPoint, setHoveredTelemetryPoint] = useState<TelemetryPoint | null>(null);
   const [activePerformancePoint, setActivePerformancePoint] = useState<TelemetryPoint | null>(null);
+  const [transitionBgVisible, setTransitionBgVisible] = useState(false);
+  const [transitionBgTheme, setTransitionBgTheme] = useState<'gt' | 'f1'>(currentTheme);
   
   // Video sources for different themes
   const videoSources = {
     // Blob storage versions (for production)
-    gt: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4",
-    f1: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4",
+    // gt: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/gt_4k.mp4",
+    // f1: "https://mgvivjngq1ezsgqx.public.blob.vercel-storage.com/trail_break/f1_4k.mp4",
     // Local 4k versions (for development - uncomment for local testing)
-    // gt: "/gt_4k.mp4",
-    // f1: "/f1_4k.mp4"
+    gt: "/gt_4k.mp4",
+    f1: "/f1_4k.mp4"
   };
   
-  const videoSrc = videoSources[currentTheme];
+  // Active video source (delayed to allow fade-out)
+  const [activeVideoSrc, setActiveVideoSrc] = useState(videoSources[currentTheme]);
+  const videoSrc = activeVideoSrc;
 
-  // Reset video states when theme changes
+  // Handle theme changes with fade-out/fade-in transition
   useEffect(() => {
+    const newVideoSrc = videoSources[currentTheme];
+    
+    // If video source hasn't changed, do nothing
+    if (activeVideoSrc === newVideoSrc) {
+      return;
+    }
+
+    // Theme has changed - remove spotlight effect immediately, show new theme's bg image, and trigger fade out
+    setVideoEnded(false); // Remove spotlight effect immediately
+    setTransitionBgTheme(currentTheme);
+    setTransitionBgVisible(true);
     setVideoVisible(false);
-    setVideoEnded(false);
-    setVideosLoaded(false);
-  }, [currentTheme]);
+    
+    // Wait for fade-out to complete (2000ms transition), then switch video
+    const fadeOutTimer = setTimeout(() => {
+      setVideosLoaded(false);
+      setActiveVideoSrc(newVideoSrc);
+    }, 2000); // Match the video transition duration
+
+    return () => clearTimeout(fadeOutTimer);
+  }, [currentTheme, activeVideoSrc, videoSources]);
 
   // Preload video
   useEffect(() => {
@@ -489,7 +511,7 @@ export default function LandingPage() {
     const video = videoRef.current;
     if (!video || !videosLoaded) return;
 
-    // Load and play the GT video
+    // Load and play the video
     if (!video.src.endsWith(videoSrc)) {
       video.src = videoSrc;
       video.load();
@@ -500,6 +522,7 @@ export default function LandingPage() {
           // Trigger fade-in animation after video starts playing
           setTimeout(() => {
             setVideoVisible(true);
+            setTransitionBgVisible(false);
           }, 100);
         }).catch(error => {
           console.error('Video play failed:', error);
@@ -508,6 +531,7 @@ export default function LandingPage() {
             video.play().then(() => {
               setTimeout(() => {
                 setVideoVisible(true);
+                setTransitionBgVisible(false);
               }, 100);
             }).catch(console.error);
           }, 500);
@@ -515,15 +539,46 @@ export default function LandingPage() {
       }
     }
   }, [videoSrc, videosLoaded]);
+
+  // Trigger content fade-in animation shortly after mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentVisible(true);
+    }, 300); // Slightly delayed after video starts
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <main className="min-h-screen text-white">
       <div className="max-w-[1800px] mx-auto px-6 py-0">
         {/* Hero Section */}
                  <section className="relative overflow-hidden min-h-screen flex flex-col items-center justify-between text-center pt-16 md:pt-20 lg:pt-24 pb-0 isolate">
-          <div className="fixed inset-0 z-0 pointer-events-none h-screen w-screen bg-gray-900">
+          <div className="fixed inset-0 z-0 pointer-events-none h-screen w-screen bg-black">
+            {/* Transition background images */}
+            <div 
+              className="absolute inset-0 w-full h-full transition-opacity duration-1000 ease-out"
+              style={{
+                opacity: transitionBgVisible && transitionBgTheme === 'gt' ? 1 : 0,
+                backgroundImage: 'url(/gt_temp_bg.png)',
+                backgroundSize: '40%',
+                backgroundPosition: 'center 85%',
+                backgroundRepeat: 'no-repeat'
+              }}
+            />
+            <div 
+              className="absolute inset-0 w-full h-full transition-opacity duration-1000 ease-out"
+              style={{
+                opacity: transitionBgVisible && transitionBgTheme === 'f1' ? 1 : 0,
+                backgroundImage: 'url(/f1_temp_bg.png)',
+                backgroundSize: '40%',
+                backgroundPosition: 'center 85%',
+                backgroundRepeat: 'no-repeat'
+              }}
+            />
+            
             <video 
               ref={videoRef}
-              className="w-full h-full object-cover transition-all duration-2000 ease-out" 
+              className="absolute inset-0 w-full h-full object-cover transition-all duration-2000 ease-out" 
               autoPlay 
               muted 
               playsInline 
@@ -535,6 +590,15 @@ export default function LandingPage() {
                 transform: videoVisible ? 'scale(1)' : 'scale(1.1)'
               }}
             />
+            
+            {/* Vignette overlay */}
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'radial-gradient(ellipse at center, transparent 0%, transparent 30%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%)'
+              }}
+            />
+            
             {/* Custom grayscale overlay with colored center circle */}
             {videoEnded && (
               <div className="absolute inset-0 z-10 pointer-events-none">
@@ -553,7 +617,12 @@ export default function LandingPage() {
           </div>
           
           {/* Main content - positioned at top */}
-          <div className="relative z-10 flex-shrink-0">
+          <div 
+            className="relative z-10 flex-shrink-0 transition-opacity duration-1000 ease-out"
+            style={{
+              opacity: contentVisible ? 1 : 0
+            }}
+          >
             <h1 className="text-8xl md:text-9xl font-bold tracking-tight mb-4 cursor-pointer group" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.5)' }}>
              <span className={`inline-block transition-colors duration-500 ease-in-out text-white ${currentTheme === 'gt' ? 'group-hover:text-red-500' : 'group-hover:text-blue-500'}`}>Trail</span>{" "}
              <span className={`inline-block transition-colors duration-500 ease-in-out ${currentTheme === 'gt' ? 'text-red-500 group-hover:text-white' : 'text-blue-500 group-hover:text-white'}`}>Break</span>
@@ -572,7 +641,13 @@ export default function LandingPage() {
           </div>
           
           {/* Buttons - positioned at bottom */}
-          <div className="relative z-10 flex-shrink-0">
+          <div 
+            className="relative z-10 flex-shrink-0 transition-opacity duration-1000 ease-out"
+            style={{
+              opacity: contentVisible ? 1 : 0,
+              transitionDelay: '200ms'
+            }}
+          >
            <div className="flex flex-col sm:flex-row gap-4 justify-center">
              <Link
                href={session ? "/data" : "/auth/signin"}
@@ -625,7 +700,13 @@ export default function LandingPage() {
       </div>
 
       {/* Opaque content container that starts below the hero */}
-      <div className="relative z-[6] w-full bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-t-3xl">
+      <div 
+        className="relative z-[6] w-full bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-t-3xl transition-opacity duration-1000 ease-out"
+        style={{
+          opacity: contentVisible ? 1 : 0,
+          transitionDelay: '400ms'
+        }}
+      >
         <div className="max-w-6xl mx-auto px-6 py-20">
           
           {/* Section Header */}
